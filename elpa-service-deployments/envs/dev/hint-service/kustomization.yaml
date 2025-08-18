@@ -1,0 +1,53 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: "dev-"
+nameSuffix: "-hint-service"
+
+resources:
+  - ../../base
+
+components:
+  - ../../base/components/kafka
+  - ../../base/components/postgres
+  - ../components/kafka
+  - ../components/postgres
+
+commonLabels:
+  app: hint-service
+  service: hint-service
+
+images:
+  - name: placeholder
+    newName: dev.docker.system.local/elpa-hint/hint
+    newTag: latest
+
+configMapGenerator:
+  - name: backend-cm
+    behavior: merge
+    literals:
+      - SERVICE_NAME=hint-service
+      - POSTGRES_SCHEMA=hint
+      - AUTH_URL=https://employee.login.int.test-company.org/
+
+patches:
+  - target:
+      kind: Deployment
+      name: app
+    patch: |-
+      - op: replace
+        path: /spec/selector/matchLabels
+        value:
+          app: hint-service
+      - op: replace
+        path: /spec/template/metadata/labels
+        value:
+          app: hint-service
+          service: hint-service
+  - target:
+      kind: Service
+    patch: |-
+      - op: replace
+        path: /spec/selector
+        value:
+          app: hint-service

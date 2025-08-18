@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: elpa4
+  name: hint-service
+spec:
+  selector:
+    app: hint-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      appProtocol: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/path: /metrics/prometheus
+    prometheus.io/port: '8081'
+    test-company.de/prometheus.scrape: "true"
+    test-company.de/prometheus.port: "8081"
+    test-company.de/prometheus.path: "/metrics/prometheus"
+  labels:
+    app: hint-service
+  name: hint-service-metrics
+spec:
+  ports:
+    - name: http
+      port: 8081
+      protocol: TCP
+      targetPort: 8081
+  selector:
+    app: hint-service
+  type: ClusterIP

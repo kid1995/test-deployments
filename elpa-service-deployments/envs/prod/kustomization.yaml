@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elpa4
+
+resources:
+  - ../../services/hint-service
+  - ../../services/ppa-service
+  - ../../secrets
+
+
+commonLabels:
+  environment: prod
+  version: prod
+
+configMapGenerator:
+  - name: backend-cm
+    behavior: merge
+    literals:
+      - AUTH_URL=https://employee.login.test-company.org/
+      - KAFKA_BROKERS=prod-kafka-brokers.kafka.svc.cluster.local:9093
+      - KAFKA_BOOTSTRAP_SERVER=bootstrap-prod.kafka.svc.cluster.local:9443
+      - KAFKA_OAUTH_TOKEN_ENDPOINT_URL=https://idp-prod.kafka.svc.cluster.local:9443/token
+      - POSTGRES_HOST=vipsiae11p.system-a.local
+      - POSTGRES_DB_NAME=elpapgp
+      - POSTGRES_USER=ZA-SVC-ELPAG-P
+replicas:
+  - name: hint-service-app
+    count: 3
+  - name: ppa-service-app
+    count: 3
+
+patches:
+  - target:
+      kind: Deployment
+      name: ".*-app"
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"

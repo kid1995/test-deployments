@@ -1,0 +1,32 @@
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elpa4
+
+resources:
+  - ../../services/hint-service
+  - ../../services/ppa-service
+  - ../../secrets
+
+
+commonLabels:
+  environment: staging
+  version: staging
+
+configMapGenerator:
+  - name: backend-cm
+    behavior: merge
+    literals:
+      - AUTH_URL=https://employee.login.staging.test-company.org/
+      - KAFKA_BROKERS=staging-kafka-brokers.kafka.svc.cluster.local:9093
+      - KAFKA_BOOTSTRAP_SERVER=bootstrap-nop.kafka.svc.cluster.local:9443
+      - KAFKA_OAUTH_TOKEN_ENDPOINT_URL=http://idp-staging.kafka.svc.cluster.local:9443/token
+      - POSTGRES_HOST=vipsiae11a.system.local
+      - POSTGRES_DB_NAME=elpapga
+      - POSTGRES_USER=ZA-SVC-ELPAG-A
+replicas:
+  - name: hint-service-app
+    count: 2
+  - name: ppa-service-app
+    count: 2

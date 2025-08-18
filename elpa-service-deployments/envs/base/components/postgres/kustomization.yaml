@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      kind: Deployment
+      name: app
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: POSTGRES_SCHEMA
+          valueFrom:
+            fieldRef:
+              fieldPath: K8S_ENVIRONMENT_LABEL
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: FLYWAY_ENABLED
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: FLYWAY_LOCATIONS
+          value: "db/migration"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgresuser-secret
+              key: PASSWORD

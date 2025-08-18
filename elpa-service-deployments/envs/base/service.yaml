@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  labels:
+    app: app-service
+spec:
+  selector:
+    app: app-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      appProtocol: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name:  app
+  labels:    
+    name: app-metrics
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/path: /metrics/prometheus
+    prometheus.io/port: '8081'
+    signal-iduna.de/prometheus.scrape: "true"
+    signal-iduna.de/prometheus.port: "8081"
+    signal-iduna.de/prometheus.path: "/metrics/prometheus"
+spec:
+  ports:
+    - name: http
+      port: 8081
+      protocol: TCP
+      targetPort: 8081
+  selector:
+    app: service
+  type: ClusterIP
