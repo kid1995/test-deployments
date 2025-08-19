@@ -2,7 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namePrefix: "dev-"
-nameSuffix: "-hint-service"
+nameSuffix: "-hint"
 
 resources:
   - ../../base
@@ -13,9 +13,10 @@ components:
   - ../components/kafka
   - ../components/postgres
 
-commonLabels:
-  app: hint-service
-  service: hint-service
+labels:
+  - pairs:
+      app: hint
+      service: hint-service
 
 images:
   - name: placeholder
@@ -26,7 +27,7 @@ configMapGenerator:
   - name: backend-cm
     behavior: merge
     literals:
-      - SERVICE_NAME=hint-service
+      - SERVICE_NAME=hint
       - POSTGRES_SCHEMA=hint
       - AUTH_URL=https://employee.login.int.test-company.org/
 
@@ -38,16 +39,25 @@ patches:
       - op: replace
         path: /spec/selector/matchLabels
         value:
-          app: hint-service
+          app: hint
       - op: replace
         path: /spec/template/metadata/labels
         value:
-          app: hint-service
-          service: hint-service
+          app: hint
+          service: hint
   - target:
+      name: app
       kind: Service
     patch: |-
       - op: replace
         path: /spec/selector
         value:
-          app: hint-service
+          app: hint
+  - target:
+      name: metrics
+      kind: Service
+    patch: |-
+      - op: replace
+        path: /spec/selector
+        value:
+          app: hint-metrics
