@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: elpa4
+  name: dev-app-hint-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: hint-service
+  template:
+    metadata:
+      labels:
+        app: hint-service
+    spec:
+      containers:
+        # pod name and images will be overwritten by kustomize
+        - name: hint-service
+          image: dev.docker.system.local/elpa-hint/hint:latest
+          ports:
+            - containerPort: 8080
+          # quotas will be overwritten by kustomize
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          # health checks for all service pods
+          livenessProbe:
+            httpGet:
+              path: /health-check?type=ALIVE
+              port: 8080
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health-check?type=READY
+              port: 8080
+              initialDelaySeconds: 180
+              periodSeconds: 20
+              timeoutSeconds: 2
+              successThreshold: 1
+              failureThreshold: 3
+          # security config for the pods
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            runAsNonRoot: true
+          envFrom:
+            - configMapRef:
+                name: backend-cm
+          env:
+          # K8s
+            - name: K8S_NAMESPACE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: K8S_POD_UID
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.uid
+            - name: K8S_ENVIRONMENT_LABEL
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['environment']"
+            - name: SERVICE_NAME
+              value: hint-service
+            - name: POSTGRES_SCHEMA
+              value: hint
+      securityContext:
+        # Definiert ein Seccomp Profil für den Pod.
+        seccompProfile:
+          # Typ des Seccomp Profils (RuntimeDefault = Standardprofil der Runtime).
+          type: RuntimeDefault
+        # Angabe, ob der Pod als Nicht-Root-Benutzer ausgeführt werden soll (true = ja).
+        runAsNonRoot: true

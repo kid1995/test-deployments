@@ -1,0 +1,25 @@
+# base/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: elpa4
+  name: backend-cm  
+data:
+  SERVICE_NAME: "ppa-service"
+  LOG_LEVEL: "INFO"
+  LOG_LEVEL_SI: "DEBUG"
+  LOGBACK_FILE: "logback-json.xml"
+  JAVA_OPTS: "-javaagent:/splunk-otel-javaagent.jar -Dsplunk.profiler.enabled=true -Dsplunk.profiler.memory.enabled=true -Dotel.logs.exporter=none -Dhttp.nonProxyHosts=localhost|127.0.0.1|*.local|*.svc|*.copsinop.de|*.copsi.de|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.* -Dhttps.nonProxyHosts=localhost|127.0.0.1|*.local|*.svc|*.copsinop.de|*.copsi.de|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.* -XX:MaxRAMPercentage=50"
+  AUTH_URL: "https://employee.login.int.signal-iduna.org/"
+  AUTH_USERS: S000325
+  KAFKA_BROKERS: "si-cluster-kafka-brokers.kafka-cluster-tst.svc.cluster.local:9093"
+  KAFKA_BOOTSTRAP_SERVER: "bootstrap-nop.kafka.svc.cluster.local:9443"
+  KAFKA_OAUTH_TOKEN_ENDPOINT_URL: "http://idp-nop.kafka.svc.cluster.local:9443/token"
+  KAFKA_USER: "elpa-ppa-service-tst"
+  KAFKA_CONSUMER_GROUP: "kafka-elpa-ppa-service"
+  KAFKA_SASL_MECHANISM: SCRAM-SHA-512
+  KAFKA_PROTOCOL: SASL_SSL
+  POSTGRES_HOST: "vipsiae11t.system-a.local"
+  POSTGRES_DB_NAME: "elpapgt"
+  FLYWAY_ENABLED: "true"
+  FLYWAY_LOCATIONS: "db/migration"

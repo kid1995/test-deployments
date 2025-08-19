@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: elpa4
+  name: dev-app-ppa-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: ppa-service
+  template:
+    metadata:
+      labels:
+        app: ppa-service
+    spec:
+      containers:
+        # pod name and images will be overwritten by kustomize
+        - name: ppa-service
+          image: dev.docker.system.local/elpa-ppa/ppa:latest
+          ports:
+            - containerPort: 8080
+          # quotas will be overwritten by kustomize
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          # health checks for all service pods
+          livenessProbe:
+            httpGet:
+              path: /health-check?type=ALIVE
+              port: 8080
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health-check?type=READY
+              port: 8080
+              initialDelaySeconds: 180
+              periodSeconds: 20
+              timeoutSeconds: 2
+              successThreshold: 1
+              failureThreshold: 3
+          # security config for the pods
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            runAsNonRoot: true
+          env:
+            - name: SERVICE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: SERVICE_NAME
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: LOG_LEVEL
+            - name: LOG_LEVEL_SI
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: LOG_LEVEL_SI
+            - name: LOGBACK_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: LOGBACK_FILE
+            - name: JAVA_OPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: JAVA_OPTS
+            - name: AUTH_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: AUTH_URL
+            - name: AUTH_USERS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: AUTH_USERS
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_BROKERS
+            - name: KAFKA_BOOTSTRAP_SERVER
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_BOOTSTRAP_SERVER
+            - name: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+            - name: KAFKA_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_USER
+            - name: KAFKA_CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_CON```                  
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: LOG_LEVEL
+            - name: LOG_LEVEL_SI
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: LOG_LEVEL_SI
+            - name: LOGBACK_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: LOGBACK_FILE
+            - name: JAVA_OPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: JAVA_OPTS
+            - name: AUTH_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: AUTH_URL
+            - name: AUTH_USERS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: AUTH_USERS
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_BROKERS
+            - name: KAFKA_BOOTSTRAP_SERVER
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_BOOTSTRAP_SERVER
+            - name: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+            - name: KAFKA_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_USER
+            - name: KAFKA_CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_CONSUMER_GROUP
+      securityContext:
+        # Definiert ein Seccomp Profil für den Pod.
+        seccompProfile:
+          # Typ des Seccomp Profils (RuntimeDefault = Standardprofil der Runtime).
+          type: RuntimeDefault
+        # Angabe, ob der Pod als Nicht-Root-Benutzer ausgeführt werden soll (true = ja).
+        runAsNonRoot: true

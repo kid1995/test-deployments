@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: app  # This will be overridden by service-specific labels
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+        - name: app
+          image: placeholder:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health-check?type=ALIVE
+              port: http
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health-check?type=READY
+              port: http
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            runAsNonRoot: true
+          envFrom:
+            - configMapRef:
+                name: backend-cm
+          env:
+            - name: SERVICE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app']
+            # K8s
+            - name: K8S_NAMESPACE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: K8S_POD_UID
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.uid
+            - name: K8S_ENVIRONMENT_LABEL
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['environment']
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsNonRoot: true
+      serviceAccountName: identity

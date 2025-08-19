@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-cm
+data:
+  ENABLE_JSON_LOGGING: "true"
+  LOG_LEVEL: "INFO"
+  LOG_LEVEL_SI: "DEBUG"
+  LOGBACK_FILE: "logback-json.xml"
+  JAVA_OPTS: "-javaagent:/splunk-otel-javaagent.jar -Dsplunk.profiler.enabled=true -Dsplunk.profiler.memory.enabled=true"
+  POSTGRES_SHOW_SQL: "false"
+  POSTGRES_SSL_MODE: "prefer"

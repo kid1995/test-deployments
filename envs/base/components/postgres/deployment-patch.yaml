@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          env:
+            - name: POSTGRES_SCHEMA
+              valueFrom:
+                fieldRef:
+                  fieldPath: K8S_ENVIRONMENT_LABEL
+            - name: FLYWAY_ENABLED
+              value: "true"
+            - name: FLYWAY_LOCATIONS
+              value: "db/migration"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresuser-secret
+                  key: PASSWORD
