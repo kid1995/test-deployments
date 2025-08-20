@@ -8,10 +8,6 @@ spec:
       containers:
         - name: app
           env:
-            - name: POSTGRES_SCHEMA
-              valueFrom:
-                fieldRef:
-                  fieldPath: K8S_ENVIRONMENT_LABEL
             - name: FLYWAY_ENABLED
               value: "true"
             - name: FLYWAY_LOCATIONS

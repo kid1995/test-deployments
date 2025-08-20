@@ -4,4 +4,4 @@ metadata:
   name: metrics
 spec:
   selector:
-    app: hint-metrics
+    app: hint

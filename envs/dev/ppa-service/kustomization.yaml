@@ -1,47 +1,48 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namePrefix: ppa-service-
-nameSuffix: ""
+namespace: elpa4
+namePrefix: "dev-"
+nameSuffix: "-ppa"
 
 resources:
   - ../../base
 
-# Note: ppa-service doesn't use Kafka or PostgreSQL components
+components:
+  - ../../base/components/postgres
+  - ../components/postgres
 
-commonLabels:
-  app: ppa-service
-  service: ppa-service
+labels:
+  - pairs:
+      app: ppa
+      service: ppa-service
 
 images:
   - name: placeholder
-    newName: dev.docker.system.local/elpa-ppa/ppa
-    newTag: latest
+    newName: docker-registry.default.svc:5000/elpa-ppa-abn/ppa
+    newTag: 33909f4.1440
 
 configMapGenerator:
   - name: backend-cm
     behavior: merge
     literals:
-      - SERVICE_NAME=ppa-service
+      - SERVICE_NAME=ppa
+      - POSTGRES_SCHEMA=ppa
+      - AUTH_URL=https://employee.login.int.signal-iduna.org/
 
 patches:
-  - target:
+  - path: deployment-patch.yaml
+    target:
       kind: Deployment
       name: app
-    patch: |-
-      - op: replace
-        path: /spec/selector/matchLabels
-        value:
-          app: ppa-service
-      - op: replace
-        path: /spec/template/metadata/labels
-        value:
-          app: ppa-service
-          service: ppa-service
-  - target:
+  - path: service-app-patch.yaml
+    target: 
       kind: Service
-    patch: |-
-      - op: replace
-        path: /spec/selector
-        value:
-          app: ppa-service
+      name: app
+  - path: service-metrics-patch.yaml
+    target: 
+      kind: Service
+      name: metrics
+
+      
+

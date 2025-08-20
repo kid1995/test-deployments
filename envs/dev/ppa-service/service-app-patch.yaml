@@ -4,4 +4,4 @@ metadata:
   name: service
 spec:
   selector:
-    app: hint
+    app: ppa
