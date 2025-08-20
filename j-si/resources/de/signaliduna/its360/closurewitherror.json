@@ -1,0 +1,16 @@
+{
+    "Change": {
+        "ReviewResults": [
+            "AUTOMATICALLY_FILLED"
+        ],
+        "close": {
+                "ClosingComments": [
+                    "Closing Comment - automated error"
+                ],
+                "ClosureCode": 3
+            },
+        "header": {
+                "Phase": "Closure"
+            }
+        }
+}

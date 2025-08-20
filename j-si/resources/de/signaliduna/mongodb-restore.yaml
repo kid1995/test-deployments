@@ -1,0 +1,138 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: ${BRANCH_NAME}-mongodb-restore-template
+  annotations:
+    description: "MongoDB Restore. You must have persistent volumes available in your cluster to use this template."
+    iconClass: "icon-backup"
+    tags: "database,mongodb,backup"
+parameters:
+  - name: BRANCH_NAME 
+    displayName: "Branch name"
+    description: "Name of origin branch"
+    required: true
+
+  - name: RESTORE_HOST
+    displayName: "MongoDB Database Name"
+    description: "MongoDB connect string to connect to the ReplSet in <RS>/<host>[:port][,<host>[:port]... notation"
+    required: true
+
+  - name: MEMORY_REQUEST
+    displayName: "Memory Request"
+    description: "request of memory the container will use."
+    required: true
+
+  - name: CPU_REQUEST
+    displayName: "CPU Request"
+    description: "request of CPU the container will use"
+    required: true
+
+  - name: MEMORY_LIMIT
+    displayName: "Memory Limit"
+    description: "Maximum amount of memory the container can use."
+    required: true
+
+  - name: CPU_LIMIT
+    displayName: "CPU Limit"
+    description: "Maximum CPU count the container can use"
+    required: true
+
+  - name: MONGODB_SECRETS_NAME
+    displayName: "MongoDB secrets name"
+    description: "Name of the secrets for the MongoDB"
+    required: true
+    
+  - name: RESTORE_IMAGE
+    displayName: "Restore Container Image"
+    description: "A reference to a supported Bastiob container image."
+    required: true
+
+  - name: BACKUP_TIMESTAMP
+    displayName: "Timestamp of the backup to restore from"
+    description: "Timestamp of the backup to restore from"
+    required: true
+
+  - name: RESTORE_SELFSERVICE
+    displayName: "Flag if Restore is for Selfservice"
+    description: "Flag if Restore is for Selfservice"
+    required: true
+
+  # internal parameters - you don't need to set this parameters
+  - name: MONGODB_AUTHENTICATION_DATABASE
+    displayName: "MONGODB_AUTHENTICATION_DATABASE"
+    description: "MONGODB_AUTHENTICATION_DATABASE"
+    value: admin
+
+  - name: RESTORE_USER
+    displayName: "MongoDB Connection Username"
+    description: "Username for MongoDB user that will be used for accessing the database."
+    value: admin
+
+  - name: JOB_SUFFIX
+    displayName: "JOB_SUFFIX"
+    description: "Suffix for the name of the cronjob object"
+    generate: expression
+    from: "[a-z0-9]{4}"
+    required: true
+
+  - name: BACKUP_PATH
+    displayName: "MongoDB backup directory"
+    description: "MongoDB backup directory"
+    value: "/var/lib/mongodb/backups"
+    required: true
+
+objects:
+  - apiVersion: batch/v1
+    kind: Job
+    metadata: 
+      name: "${BRANCH_NAME}-mongodb-selfservice-restore"
+      labels:
+        branch: "${BRANCH_NAME}"
+    spec:
+      parallelism: 1
+      completions: 1
+      template:
+        metadata:
+          label:
+            name: mongodb-restore-template
+        spec: 
+          containers:
+            - name: restore-container
+              image: "${RESTORE_IMAGE}"
+              imagePullPolicy: "Always"
+              volumeMounts:
+                - mountPath: "${BACKUP_PATH}"
+                  name: mongobackup-volume
+              env:
+                - name: RESTORE_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_ADMIN_USER
+                - name: RESTORE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_ADMIN_PASSWORD
+                - name: RESTORE_HOST
+                  value: "${RESTORE_HOST}"
+                - name: BACKUP_PATH
+                  value: "${BACKUP_PATH}"
+                - name: MONGODB_AUTHENTICATION_DATABASE
+                  value: "${MONGODB_AUTHENTICATION_DATABASE}"
+                - name: BACKUP_TIMESTAMP
+                  value: "${BACKUP_TIMESTAMP}"
+                - name: RESTORE_SELFSERVICE
+                  value: "${RESTORE_SELFSERVICE}"
+              resources:
+                requests:
+                  memory: "${MEMORY_REQUEST}"
+                  cpu: "${CPU_REQUEST}"
+                limits:
+                  memory: "${MEMORY_LIMIT}"
+                  cpu: "${CPU_LIMIT}"
+          restartPolicy: "Never"
+          volumes:
+            - name: mongobackup-volume
+              persistentVolumeClaim:
+                claimName: "${BRANCH_NAME}-mongobackup"

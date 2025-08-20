@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: ${BRANCH_NAME}-opa-config-template
+
+parameters:
+- description: Name of origin branch
+  displayName: Branch name
+  name: BRANCH_NAME
+  required: true
+
+- description: Service Namespace of the application
+  displayName: Service Namespace
+  name: SERVICE_NAMESPACE
+  required: true
+
+objects:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: "${BRANCH_NAME}-opa"
+    labels:
+      branch: ${BRANCH_NAME}
+  data:
+    OPA_HOST: "${BRANCH_NAME}-opa.${SERVICE_NAMESPACE}.svc:8181"
+    OPA_BASE_URL: "http://${BRANCH_NAME}-opa.${SERVICE_NAMESPACE}.svc:8181"

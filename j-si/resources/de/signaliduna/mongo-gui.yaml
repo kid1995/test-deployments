@@ -1,0 +1,153 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: ${BRANCH_NAME}-mongodb-gui-template
+  annotations:
+    description: "Mongodb GUI."
+    iconClass: "icon-gui"
+    tags: "database,mongodb,Gui"
+parameters:
+  # please set this parameters whith "oc new-app -e <parameter_name>=<parameter_value> -f <this_file>"
+  - name: BRANCH_NAME 
+    displayName: "Branch name"
+    description: "Name of origin branch"
+    required: true
+
+  - name: MONGODB_SECRETS_NAME
+    displayName: "MongoDB secrets name"
+    description: "Name of the secrets for the MongoDB"
+    required: true
+
+  - name: MONGODB_ADMIN_PASSWORD
+    displayName: "MONGODB_ADMIN_PASSWORD"
+    description: "mongodb adminpassword for"
+    required: true
+
+  - name: SERVICE_NAMESPACE
+    displayName: "SERVICE_NAMESPACE"
+    description: "SERVICE_NAMESPACE"
+    required: true
+
+  - name: ME_CONFIG_MONGODB_SERVER
+    displayName: "MongoDB Server"
+    description: "MongoDB host name or IP address. The default is `localhost` in the config file and `mongo` in the docker image. If it is a replica set, use a comma delimited list of the host names."
+    required: false
+
+  - name: ME_CONFIG_OPTIONS_EDITORTHEME
+    displayName: "Web editor color theme"
+    description: "More information: http://codemirror.net/demo/theme.html"
+    value: "default"
+    required: false
+
+  - name: ME_CONFIG_MONGODB_ENABLE_ADMIN
+    displayName: "Enable Admin"
+    description: "Enable administrator access."
+    value: "true"
+    required: false
+
+  - name: GUI_IMAGE
+    displayName: "Mongo-GUI Container Image"
+    description: "A reference to a supported Bastiob container image."
+    required: true
+
+  - name: SERVICE_NAMESPACE_FOR_ROUTE
+    displayName: "First five chars of serviceGroup and serviceName"
+    description: "First five chars of serviceGroup and serviceName"
+    required: true
+
+objects:
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${BRANCH_NAME}-mongo-gui-internal"
+      labels:
+        app: "${BRANCH_NAME}"
+        branch: "${BRANCH_NAME}"
+      annotations:
+        service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+        auto-discovery.securecodebox.io/ignore: true
+    spec:
+      clusterIP: None
+      # the list of ports that are exposed by this service
+      ports:
+        - name: mongo-gui
+          port: 4321
+
+          targetPort: 4321
+      # will route traffic to pods having labels matching this selector
+      selector:
+        name: "${BRANCH_NAME}-mongo-gui"
+    
+  - kind: Route
+    apiVersion: route.openshift.io/v1
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: ${BRANCH_NAME}
+        branch: ${BRANCH_NAME}
+      name: ${BRANCH_NAME}-mongo-gui
+    spec:
+      host: "${BRANCH_NAME}-mgui-${SERVICE_NAMESPACE_FOR_ROUTE}.osot.system.local"
+      port:
+        targetPort: mongo-gui
+      tls:
+        termination: edge
+      to:
+        kind: Service
+        name: ${BRANCH_NAME}-mongo-gui-internal
+        weight: 100
+      wildcardPolicy: None
+  - kind: DeploymentConfig
+    apiVersion: v1
+    metadata:
+      name: "${BRANCH_NAME}-mongo-gui"
+      labels:
+        app: "${BRANCH_NAME}"
+        branch: "${BRANCH_NAME}"
+    spec:
+      serviceName: "${BRANCH_NAME}-mongo-gui-internal"
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            name: "${BRANCH_NAME}-mongo-gui"
+            branch: "${BRANCH_NAME}"
+        spec:  
+          containers:
+            - name: mongo-gui-container
+              image: "${GUI_IMAGE}"
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 4321
+                  protocoll: tcp
+              restartPolicy: Always
+              env:
+                - name: ME_CONFIG_MONGODB_SERVER
+                  valueFrom:
+                    configMapKeyRef:
+                      key: MONGODB_HOSTS
+                      name: ${BRANCH_NAME}-mongodb                  
+                - name: ME_CONFIG_MONGODB_OPTIONS
+                  valueFrom:
+                    configMapKeyRef:
+                      key: MONGODB_OPTIONS
+                      name: ${BRANCH_NAME}-mongodb
+                - name: ME_CONFIG_MONGODB_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_USER
+                - name: ME_CONFIG_MONGODB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_PASSWORD
+        resources:
+              requests:
+                memory: "25Mi"
+                cpu: "10m"
+              limits:
+                memory: "250Mi"
+                cpu: "100m"
+      updateStrategy:
+        type: RollingUpdate

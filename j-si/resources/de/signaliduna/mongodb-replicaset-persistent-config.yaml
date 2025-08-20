@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: ${BRANCH_NAME}replicaset-config-template
+
+parameters:
+- description: Name of origin branch
+  displayName: Branch name
+  name: BRANCH_NAME
+  required: true
+
+- description: Service Namespace of the application
+  displayName: Service Namespace
+  name: SERVICE_NAMESPACE
+  required: true
+
+objects:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: "${BRANCH_NAME}-mongodb"
+    labels:
+      branch: ${BRANCH_NAME}
+  data:
+    MONGODB_HOSTS: "${BRANCH_NAME}-mongodb-internal.${SERVICE_NAMESPACE}.svc:27017"
+    MONGODB_OPTIONS: "replicaSet=rs0"

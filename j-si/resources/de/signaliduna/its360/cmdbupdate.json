@@ -1,0 +1,15 @@
+{
+    "Change": {
+        "ImplementationEnd": "AUTOMATICALLY_FILLED",
+        "ImplementationStart": "AUTOMATICALLY_FILLED",
+        "description.structure": {
+            "ImplementationComments": [
+                "Automated"
+            ]
+        },
+            "header": {
+                "Phase": "CMDB Update",
+                "RiskAssessment": "0"
+            }
+        }
+}

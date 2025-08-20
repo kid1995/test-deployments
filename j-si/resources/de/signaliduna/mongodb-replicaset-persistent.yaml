@@ -1,0 +1,270 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: ${BRANCH_NAME}-mongodb-petset-replication
+  annotations:
+    description: "MongoDB Replication Example (based on StatefulSet). You must have persistent volumes available in your cluster to use this template."
+    iconClass: "icon-mongodb"
+    tags: "database,mongodb,replication"
+parameters:
+  - name: BRANCH_NAME 
+    displayName: "Branch name"
+    description: "Name of origin branch"
+    required: true
+
+  - name: TARGET_SEGMENT
+    displayName: "TARGET_SEGMENT"
+    description: "Different Scheduling for ABN/PRD"
+    required: true
+
+  - name: MONGODB_DATABASE
+    displayName: "MongoDB Database Name"
+    description: "Name of the MongoDB database accessed."
+    required: true
+
+  - name: MONGODB_REPLICA_NAME
+    displayName: "Replica Set Name"
+    description: "The name of the replica set."
+    value: rs0
+    required: true
+
+  - name: MONGODB_IMAGE
+    displayName: "MongoDB Container Image"
+    description: "A reference to a supported MongoDB container image."
+    required: true
+
+  - name: MONGODB_SERVICE_NAME
+    displayName: "OpenShift Service Name"
+    description: "The name of the OpenShift Service exposed for the database."
+    required: true
+
+  - name: VOLUME_CAPACITY
+    displayName: "Volume Capacity"
+    description: "Volume space available for data, e.g. 512Mi, 2Gi."
+    required: true
+
+  - name: MEMORY_REQUEST
+    displayName: "Memory Request"
+    description: "request of memory the container will use."
+    required: true
+
+  - name: CPU_REQUEST
+    displayName: "CPU Request"
+    description: "request of CPU the container will use"
+    required: true
+
+  - name: MEMORY_LIMIT
+    displayName: "Memory Limit"
+    description: "Maximum amount of memory the container can use."
+    required: true
+
+  - name: CPU_LIMIT
+    displayName: "CPU Limit"
+    description: "Maximum CPU count the container can use"
+    required: true
+
+    # from Secrets
+  - name: MONGODB_SECRETS_NAME
+    displayName: "MongoDB secrets name"
+    description: "Name of the secrets for the MongoDB"
+    required: true
+
+  - name: REPLICASET_SIZE
+    displayName: "Size of the MongoDB-Replica-Set"
+    description: "Size of the MongoDB-Replica-Set"
+    required: true
+  
+  - name: WIREDTIGER_CACHE_SIZE
+    displayName: "Size of WiredTiger cache"
+    description: "Maximum Size of WiredTiger cache"
+    required: true
+
+  - name: THIRD_RZ
+    displayName: "Where the third Pod starts"
+    description: "Where the third Pod starts"
+    required: true
+
+    # will be used from secret - optional
+  - name: MONGODB_USER
+    displayName: "MongoDB Connection Username"
+    description: "Username for MongoDB user that will be used for accessing the database."
+    required: false
+
+    # will be used from secret - optional
+  - name: MONGODB_PASSWORD 
+    displayName: Password of mongo db.
+    description: Password of mongo db.
+    required: false
+
+    # Admin Password will be used from secret -optional
+  - name: MONGODB_ADMIN_PASSWORD 
+    displayName: Password of admin mongoo db.
+    description: Password of admin mongo db.
+    required: false
+  
+    # Keyfile will be used from secret - optional
+  - name: MONGODB_KEYFILE_VALUE
+    displayName: "MongoDB Keyfile Value"
+    description: "Keyfile Value for Replicaset."
+    required: false
+    
+    # temporary until the new Storage is online
+  - name: MONGODB_STORAGE_CLASS
+    displayName: "MongoDB Storage Class"
+    description: "MongoDB Storage Class"
+    required: true
+
+objects:
+  # A headless service to create DNS records
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${MONGODB_SERVICE_NAME}-internal"
+      labels:
+        app: "${BRANCH_NAME}"
+        branch: "${BRANCH_NAME}"
+      annotations:
+        service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+    spec:
+      clusterIP: None
+      # the list of ports that are exposed by this service
+      ports:
+        - name: mongodb
+          port: 27017
+      # will route traffic to pods having labels matching this selector
+      selector:
+        name: "${MONGODB_SERVICE_NAME}"
+
+  - kind: StatefulSet
+    apiVersion: apps/v1beta1
+    metadata:
+      name: "${MONGODB_SERVICE_NAME}"
+    spec:
+      # pets get DNS/hostnames that follow the pattern: ${metadata.name}-NUM.${spec.serviceName}.default.svc.cluster.local
+      serviceName: "${MONGODB_SERVICE_NAME}-internal"
+      replicas: ${{REPLICASET_SIZE}}
+      # describes the pod that will be created if insufficient replicas are detected
+      template:
+        metadata:
+          annotations:
+            splunk.com/exclude: "false"
+          # this label will be used for count running pods
+          labels:
+            app: "${BRANCH_NAME}"
+            name: "${MONGODB_SERVICE_NAME}"
+            branch: "${BRANCH_NAME}"
+        spec:
+          tolerations:
+          - key: "dedicated"
+            operator: "Equal"
+            value: "stsgroup"
+            effect: "NoSchedule"
+          nodeSelector:
+            mongodb: ${TARGET_SEGMENT}
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 10
+                preference:
+                  matchExpressions:
+                  - key: datacenter
+                    operator: In
+                    values:
+                    - RZ1
+                    - RZ2
+                    - ${THIRD_RZ}
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                    - key: name
+                      operator: In
+                      values:
+                      - "${BRANCH_NAME}-mongodb"
+                  topologyKey: datacenter 
+          containers:
+            - name: mongo-container
+              image: "${MONGODB_IMAGE}"
+              ports:
+                - containerPort: 27017
+              args:
+                - "run-mongod-pet"
+              volumeMounts:
+                - name: mongodb-${MONGODB_SERVICE_NAME}-data
+                  mountPath: "/var/lib/mongodb/data"
+              # read all environment variables
+              env:
+                - name: MONGODB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_USER
+                - name: MONGODB_DATABASE
+                  value: "${MONGODB_DATABASE}"
+                - name: MONGODB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_PASSWORD
+                - name: MONGODB_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_ADMIN_PASSWORD
+                - name: MONGODB_REPLICA_NAME
+                  value: "${MONGODB_REPLICA_NAME}"
+                - name: MONGODB_KEYFILE_VALUE
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_KEYFILE_VALUE
+                - name: MONGODB_SERVICE_NAME
+                  value: "${MONGODB_SERVICE_NAME}-internal"
+                - name: WIREDTIGER_CACHE_SIZE
+                  value: "${WIREDTIGER_CACHE_SIZE}"
+              resources:
+                requests:
+                  memory: "${MEMORY_REQUEST}"
+                  cpu: "${CPU_REQUEST}"
+                limits:
+                  memory: "${MEMORY_LIMIT}"
+                  cpu: "${CPU_LIMIT}"
+              readinessProbe:
+                exec:
+                  command:
+                    - stat
+                    - /tmp/initialized
+                initialDelaySeconds: 15
+                timeoutSeconds: 10
+                failureThreshold: 5
+                periodSeconds: 60
+                successThreshold: 1
+              livenessProbe:
+                exec:
+                  command:
+                    - mongosh
+                    - --eval
+                    - db.adminCommand('ping')
+                initialDelaySeconds: 15
+                timeoutSeconds: 10
+                failureThreshold: 10
+                periodSeconds: 10
+                successThreshold: 1
+      updateStrategy:
+        type: RollingUpdate
+      volumeClaimTemplates:
+        - metadata:
+            name: mongodb-${MONGODB_SERVICE_NAME}-data
+            annotations:
+              # Uncomment this if using dynamic volume provisioning.
+              # https://docs.openshift.org/latest/install_config/persistent_storage/dynamically_provisioning_pvs.html
+              # volume.alpha.kubernetes.io/storage-class: anything
+          spec:
+            # the volume can be mounted as read-write by a single node
+            accessModes: [ ReadWriteOnce ]
+            resources:
+              requests:
+                storage: "${VOLUME_CAPACITY}"
+            storageClassName: "${MONGODB_STORAGE_CLASS}"

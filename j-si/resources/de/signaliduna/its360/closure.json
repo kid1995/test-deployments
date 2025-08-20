@@ -1,0 +1,16 @@
+{
+    "Change": {
+        "ReviewResults": [
+            "okay"
+        ],
+        "close": {
+                "ClosingComments": [
+                    "Closing Comment - automated okay"
+                ],
+                "ClosureCode": 1
+            },
+        "header": {
+                "Phase": "Closure"
+            }
+        }
+}

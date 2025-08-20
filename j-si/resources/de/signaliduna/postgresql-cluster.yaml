@@ -1,0 +1,475 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: postgresql-cluster
+  annotations:
+    description: "PostgreSQL Cluster using Patroni and Zalando's postgres-operator."
+    tags: "database,postgresql,patroni,configuration,crd"
+parameters:
+  - name: PGVERSION 
+    displayName: "PostgreSQL Version"
+    description: "PostgreSQL Version to use"
+    value: "11"
+    required: true
+
+  - name: PGHOME
+    displayname: "PostgreSQL Home-Dir"
+    description: "PostgreSQL Home-Dir"
+    value: "/home/postgres/pgdata"
+    required: true
+
+  - name: PGDATA
+    displayName: "PostgreSQL Datadir"
+    description: "PostgreSQL Datadir. This is the path where the database is located"
+    value: "/home/postgres/pgdata/data"
+    required: true
+
+  - name: BOOTSTRAP_METHOD
+    displayName: Custom boostrap method to use
+    description: When set use this method to boostrap a new cluster. The specified method must be defined inside the patroni container image.
+    value: initdb
+    required: false
+
+  - name: BOOTSTRAP_CURL_URL
+    displayName: Bootstrap curl URL argument
+    description: URL to use when downloading PGDATA directories. The PostreSQL major version inside the tar.gz needs to be compatible with the provided PostgreSQL binaries.
+    required: false
+
+  - name: BOOTSTRAP_CURL_UNTAR_STRIP
+    displayName: Number of directories to strip
+    description: tar strips these number of directories when unpacking the PGDATA tar.gz. E.g. if the provided structure is a/b/<pgdata> the strip must be 2.
+    required: false
+
+  - name: BOOTSTRAP_CURL_USER
+    displayName: Basic auth username
+    description: Username for HTTP (curl) basic auth.
+    required: false
+
+  - name: BOOTSTRAP_CURL_PASS
+    displayName: Basic auth password
+    description: Password for HTTP (curl) basic auth.
+    required: false
+
+  - name: CLUSTER_NAME
+    displayName: Name of the cluster.
+    description: Name of the PostgreSQL Cluster and CRD.
+    required: true
+
+  - name: BRANCH_NAME
+    displayName: Deployment branch.
+    description: Name of the branch that deployed this cluster.
+    required: false
+
+  - name: PATRONI_DOCKER_IMAGE_PATH
+    displayName: Patroni Docker image
+    description: Path and name for the Patroni Docker image to run.
+    required: true
+
+  - name: POSTGRES_EXPORTER_DOCKER_IMAGE_PATH
+    displayName: Prometheus Exporter Docker image
+    description: Path and name for the Prometheus Exporter Docker image.
+    required: true
+
+  - name: CAPACITY
+    displayName: PostgreSQL volume size
+    description: "PostgreSQL volume size for data logs and configs. (Units: Mi, Gi, default 100Gi)"
+    value: "100Gi"
+    required: true
+
+  - name: PGBR_BACKUP_SCHEDULE_FULL
+    displayName: "Backup of pgBackRest full backups"
+    description: "Cron-pattern that will be used for the internal backup schedule (default: every sunday night)."
+    value: "0 3 * * 0"
+    required: true
+
+  - name: PGBR_BACKUP_SCHEDULE_INCR
+    displayName: "Backup of pgBackRest incremental backups"
+    description: "Cron-pattern that will be used for the internal backup schedule (default: every night except sunday)."
+    value: "0 3 * * 1-6"
+    required: true
+
+  - name: STORAGE_CLASS
+    displayName: Storage Class to use
+    description: "Storage Class that should be used by PostgreSQL. (Don't use network filesystems. Default: premium)"
+    value: "premium"
+    required: true
+
+  - name: INSTANCES
+    displayName: Number of PostgreSQL instances
+    description: "Number of PostgreSQL instances that form a cluster. (Default: 3)"
+    value: "3"
+    required: true
+
+  - name: APP_DATABASE_NAME
+    displayName: Application database name
+    description: Name of the database that will be created.
+    required: true
+
+  - name: APP_DATABASE_OWNER
+    displayName: Database owner
+    description: Owner of the Database / application user.
+    required: true
+
+  - name: RESOURCES_CPU_REQUEST
+    displayName: CPU request
+    description: "CPU request values for PostgreSQL container. (Default: 100m)"
+    value: "100m"
+    required: true
+
+  - name: RESOURCES_CPU_LIMIT
+    displayName: CPU limit
+    description: "CPU limit values for PostgreSQL container. Caution: Various side-effects if you set it below 1000m. (Default: 1000m)"
+    value: "1000m"
+    required: true
+
+  - name: RESOURCES_MEMORY
+    displayName: Memory request and limit
+    description: "Memory request and limit values for PostgreSQL container. (Default: 1Gi)"
+    value: "1Gi"
+    required: true
+
+  - name: ENCODING
+    displayName: Database encoding
+    description: "Database encoding for this cluster. (Default: UTF8. The encoding needs to be supported by the container image.)"
+    value: "UTF8"
+    required: true
+
+  - name: LOCALE
+    displayName: Database locale
+    description: "Database locale for this cluster. (Default: de_DE.UTF-8. The locale needs to be supported by the container image and compatable to ENCODING.)"
+    value: "de_DE.UTF-8"
+    required: true
+
+  - name: STANZA
+    displayname: stanza name for pgbackrest
+    description: stanza name for pgbackrest
+    value: "main"
+    required: true
+
+  - name: PGBACKREST_DOCKER_IMAGE_PATH
+    displayName: pgbackrest sidecar Docker image
+    description: Path and name for the pgbackrest sidecar Docker image.
+    required: true
+
+  - name: PGBRCONF
+    displayname: Path to pgbackrest-config
+    description: Path to pgbackrest-config
+    value: "/home/postgres/pgdata/pgbackrest.conf"
+    required: true
+
+  - name: PGBRREPO
+    displayname: Path to pgbackrest-repository
+    description: Path to pgbackrest-repository. This is the path where the backups are stored (also in S3)
+    value: "/repo"
+    required: true
+
+  - name: PGBRBUCKET
+    displayname: Bucket-name for pgbackrest backups
+    description: S3-Bucket name where pgbackrest will store the backups and wals
+    value: "pgbackrest"
+    required: true
+
+  - name: PGBRS3ENDPOINT
+    displayname: Endpoint for S3-Storage
+    description: S3-Endpoint for pgbackrest where it will store the backups and wals
+    value: ""
+    required: false
+
+  - name: PGBRS3KEY
+    displayname: Access-key for S3 Endpoint
+    description: Access-key for S3 Endpoint
+    value: ""
+    required: false
+
+  - name: PGBRS3SECRET
+    displayname: Access-secret for S3 Endpoint
+    description: Access-secret for S3 Endpoint
+    value: ""
+    required: false
+  
+  - name: PGBRRETFULL
+    displayname: Number of full backups to keep
+    description: Number of full backups to keep
+    value: "7"
+    required: true
+
+  - name: PGBRRETDIFF
+    displayname: Number of diff backups to keep
+    description: Number of diff backups to keep
+    value: "7"
+    required: true
+
+  - name: BOOTSTRAP_PGBR_METHOD
+    displayname: Method for pgbackrest-restore
+    description: "There are 2 methods supported: LAST for last backup (default) and PITR for point-in-time-recovery"
+    value: "LAST"
+
+  - name: BOOTSTRAP_PGBR_TIMESTAMP
+    displayname: Timestamp for PGBR point-in-time recovery
+    description: Timestamp for PGBR point-in-time recovery in format 'YYYY-MM-DD hh:mm:ss'
+    value: ""
+
+objects:
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: patroni-pod-environment-variables
+    labels:
+      application: patroni
+  data:
+    BOOTSTRAP_METHOD: "${BOOTSTRAP_METHOD}"
+    BOOTSTRAP_CURL_URL: "${BOOTSTRAP_CURL_URL}"
+    BOOTSTRAP_CURL_UNTAR_STRIP: "${BOOTSTRAP_CURL_UNTAR_STRIP}"
+    BOOTSTRAP_CURL_USER: "${BOOTSTRAP_CURL_USER}"
+    BOOTSTRAP_CURL_PASS: "${BOOTSTRAP_CURL_USER}"
+    BOOTSTRAP_PGBR_STANZA: "${STANZA}"
+    BOOTSTRAP_PGBR_METHOD: "${BOOTSTRAP_PGBR_METHOD}"
+    BOOTSTRAP_PGBR_CONF: "${PGBRCONF}"
+    BOOTSTRAP_PGBR_TIMESTAMP: "${BOOTSTRAP_PGBR_TIMESTAMP}"
+
+- apiVersion: "acid.zalan.do/v1"
+  kind: postgresql
+  metadata:
+    name: "pg-${CLUSTER_NAME}"
+    labels:
+      sdasi/metrics: "true"
+      sdasi/metrics_path: "metrics"
+      sdasi/metrics_port: "9187"
+      branch: "${BRANCH_NAME}"
+  spec:
+    #init_containers:
+    #- name: date
+    #  image: busybox
+    #  command: [ "/bin/date" ]
+    teamId: "pg"
+    dockerImage: "${PATRONI_DOCKER_IMAGE_PATH}"
+    volume:
+      size: "${CAPACITY}"
+      storageClass: "${STORAGE_CLASS}"
+    numberOfInstances: ${{INSTANCES}}
+    users: #Application/Robot users
+      ${APP_DATABASE_OWNER}: []
+    databases:
+      ${APP_DATABASE_NAME}: "${APP_DATABASE_OWNER}"
+    enableMasterLoadBalancer: false
+    enableReplicaLoadBalancer: false
+    #allowedSourceRanges: # load balancers' source ranges for both master and replica services
+    #- 127.0.0.1/32
+  #Expert section
+    #enableShmVolume: true
+    postgresql:
+      version: "${PGVERSION}"
+      parameters:
+        unix_socket_directories: "/var/run/postgresql, /tmp, ${PGHOME}"
+        archive_command: "pgbackrest --config=${PGBRCONF} --stanza=${STANZA} archive-push %p"
+      #  shared_buffers: "32MB"
+      #  max_connections: "10"
+      #  log_statement: "all"
+    resources:
+      requests:
+        cpu: "${RESOURCES_CPU_REQUEST}"
+        memory: "${RESOURCES_MEMORY}"
+      limits:
+        cpu: "${RESOURCES_CPU_LIMIT}"
+        memory: "${RESOURCES_MEMORY}"
+    # spiloFSGroup: 103
+    patroni:
+      initdb:
+        encoding: "${ENCODING}"
+        locale: "${LOCALE}"
+        data-checksums: "true"
+      pg_hba:
+      - hostssl all all 0.0.0.0/0 md5
+      - host    all all 0.0.0.0/0 md5
+      ttl: 60
+      loop_wait: &loop_wait 20
+      retry_timeout: 20
+      #slots:
+      #  permanent_physical_1:
+      #    type: physical
+      #  permanent_logical_1:
+      #    type: logical
+      #    database: foo
+      #    plugin: pgoutput
+      # maximum_lag_on_failover: 33554432
+    # restore a Postgres DB with point-in-time-recovery 
+    # with a non-empty timestamp, clone from an S3 bucket using the latest backup before the timestamp
+    # with an empty/absent timestamp, clone from an existing alive cluster using pg_basebackup
+    # clone:
+    #  uid: "efd12e58-5786-11e8-b5a7-06148230260c"
+    #  cluster: "acid-batman"
+    #  timestamp: "2017-12-19T12:40:33+01:00" # timezone required (offset relative to UTC, see RFC 3339 section 5.6)
+    #  s3_wal_path: "s3://custom/path/to/bucket"
+    
+    # run periodic backups with k8s cron jobs
+    # enableLogicalBackup: true
+    # logicalBackupSchedule: "30 00 * * *"
+    # maintenanceWindows:
+    # - 01:00-06:00 #UTC
+    # - Sat:00:00-04:00
+    sidecars:
+      - name: "postgres-exporter"
+        image: "${POSTGRES_EXPORTER_DOCKER_IMAGE_PATH}"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 1000m
+            memory: 128Mi
+      - name: "postgres-pgbackrest"
+        image: "${PGBACKREST_DOCKER_IMAGE_PATH}"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 1000m
+            memory: 64Mi
+        env:
+          - name: "DEBUG"
+            value: "false"
+          - name: "PGUSER"
+            valueFrom:
+              secretKeyRef:
+                name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                key: username
+          - name: "PGPASSWORD"
+            valueFrom:
+              secretKeyRef:
+                name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                key: password
+          - name: "PGHOST"
+            value: "localhost"
+          - name: "STANZA"
+            value: "${STANZA}"
+          - name: "PGHOME"
+            value: "${PGHOME}"
+          - name: "PGDATA"
+            value: "${PGDATA}"
+          - name: "PGBRCONF"
+            value: "${PGBRCONF}"
+          - name: "PGBRREPO"
+            value: "${PGBRREPO}"
+          - name: "PGBRBUCKET"
+            value: "${PGBRBUCKET}"
+          - name: "PGBRS3ENDPOINT"
+            value: "minio-${CLUSTER_NAME}"
+          - name: "PGBRS3KEY"
+            valueFrom:
+                secretKeyRef:
+                  name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                  key: username
+          - name: "PGBRS3SECRET"
+            valueFrom:
+                secretKeyRef:
+                  name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                  key: password
+          - name: "PGBRRETFULL"
+            value: "${PGBRRETFULL}"
+          - name: "PGBRRETDIFF"
+            value: "${PGBRRETDIFF}"
+          
+- kind: CronJob
+  apiVersion: batch/v1beta1
+  metadata:
+    name: "pgbackrest-${CLUSTER_NAME}-full"
+    labels:
+      name: "pgbackrest-${CLUSTER_NAME}-full"
+      branch: "${BRANCH_NAME}"
+  spec:
+    schedule: "${PGBR_BACKUP_SCHEDULE_FULL}"
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: pgbackrest-trigger
+                image: "${POSTGRES_EXPORTER_DOCKER_IMAGE_PATH}"
+                args:
+                - "curl -u ${PGUSER}:${PGPASSWORD} -d '{\"stanza\":\"main\", \"method\": \"full\"}' -H 'Content-Type: application/json' -X POST http://pg-${CLUSTER_NAME}-pgbackrest:8080/backup"
+                command:
+                - /bin/sh
+                - -c
+                env:
+                  - name: PGUSER
+                    valueFrom:
+                      secretKeyRef:
+                        name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                        key: username
+                  - name: PGPASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                        key: password
+                resources:
+                  requests:
+                    cpu: "100m"
+                    memory: "32Mi"
+                  limits:
+                    cpu: "200m"
+                    memory: "64Mi"
+            restartPolicy: "Never"
+
+- kind: CronJob
+  apiVersion: batch/v1beta1
+  metadata:
+    name: "pgbackrest-${CLUSTER_NAME}-incr"
+    labels:
+      name: "pgbackrest-${CLUSTER_NAME}-incr"
+      branch: "${BRANCH_NAME}"
+  spec:
+    schedule: "${PGBR_BACKUP_SCHEDULE_INCR}"
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: pgbackrest-trigger
+                image: "${POSTGRES_EXPORTER_DOCKER_IMAGE_PATH}"
+                args:
+                - "curl -u ${PGUSER}:${PGPASSWORD} -d '{\"stanza\":\"main\", \"method\": \"incr\"}' -H 'Content-Type: application/json' -X POST http://pg-${CLUSTER_NAME}-pgbackrest:8080/backup"
+                command:
+                - /bin/sh
+                - -c
+                env:
+                  - name: PGUSER
+                    valueFrom:
+                      secretKeyRef:
+                        name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                        key: username
+                  - name: PGPASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                        key: password
+                resources:
+                  requests:
+                    cpu: "100m"
+                    memory: "32Mi"
+                  limits:
+                    cpu: "200m"
+                    memory: "64Mi"
+            restartPolicy: "Never"
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      application: pgbackrest
+      branch: "${BRANCH_NAME}"
+    annotations:
+      auto-discovery.securecodebox.io/ignore: true
+    name: "pg-${CLUSTER_NAME}-pgbackrest"
+  spec:
+    ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      application: patroni
+      cluster-name: pg-${CLUSTER_NAME}
+      role: master
+    sessionAffinity: None
+    type: ClusterIP

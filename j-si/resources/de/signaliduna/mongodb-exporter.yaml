@@ -1,0 +1,154 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: mongodb-exporter
+  annotations:
+    description: "Mongodb Metrik exporter to prometheus"
+    iconClass: "icon-bastion"
+    tags: "database,mongodb,prometheus"
+parameters:
+  # required parameters. You have to set this
+  - name: BRANCH_NAME 
+    displayName: "Branch name"
+    description: "Name of origin branch"
+    required: true
+
+  - name: RESOURCE_NAME_PREFIX
+    description: a prefix for the Name of the openshift ressource.
+    displayName: resource prefix
+    required: false
+
+  - name: MONGODB_URI
+    displayName: "MONGODB_URI"
+    description: "connect string to the MongoDB to monitor"
+    required: false
+
+  - name: MONGODB_ADMIN_PASSWORD
+    displayName: "MONGODB_ADMIN_PASSWORD"
+    description: "mongodb adminpassword"
+    required: true
+
+  - name: SERVICE_NAMESPACE
+    displayName: "OpenShift Service Namespace"
+    description: "The name of the OpenShift Service Namespace"
+    required: true
+
+  # optional parameters - you might want to override them
+  - name: CPU_LIMIT
+    displayName: "CPU Limit"
+    description: "Maximum amount of memory the container can use."
+    value: "1"
+
+  - name: VOLUME_CAPACITY
+    displayName: "Volume Capacity"
+    description: "Volume space available for data, e.g. 512Mi, 2Gi."
+    value: "10Gi"
+    required: true
+
+  - name: MEMORY_LIMIT
+    displayName: "Memory Limit"
+    description: "Maximum amount of memory the container can use."
+    value: "2Gi"
+  
+  # internal parameters - you should not need to change theese
+  - name: EXPORTER_IMAGE
+    displayName: "Container Image"
+    description: "A reference to a supported container image."
+    required: true
+
+  - name: CPU_LIMIT
+    displayName: "CPU Limit"
+    description: "Maximum amount of memory the container can use."
+    value: "1"
+
+  - name: VOLUME_CAPACITY
+    displayName: "Volume Capacity"
+    description: "Volume space available for data, e.g. 512Mi, 2Gi."
+    value: "2Gi"
+    required: true
+
+  - name: MEMORY_LIMIT
+    displayName: "Memory Limit"
+    description: "Maximum amount of memory the container can use."
+    value: "1Gi"
+
+  - name: MONGODB_BACKUP_DIR
+    displayName: "MongoDB backup directory"
+    description: "Here are the backups from the backup CronJob mounted"
+    value: "/var/lib/mongodb/backups"
+    required: true
+
+objects:
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "${RESOURCE_NAME_PREFIX}-exporter-internal"
+      labels:
+        app: "${BRANCH_NAME}"
+        branch: "${BRANCH_NAME}"
+      annotations:
+        service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+        auto-discovery.securecodebox.io/ignore: true
+    spec:
+      clusterIP: None
+      # the list of ports that are exposed by this service
+      ports:
+        - name: prometheus-metrics
+          port: 80
+          targetPort: 9001
+      # will route traffic to pods having labels matching this selector
+      selector:
+        name: "${RESOURCE_NAME_PREFIX}-exporter"
+
+  - kind: Secret
+    apiVersion: v1
+    metadata:
+      name: "${RESOURCE_NAME_PREFIX}-exporter"
+      labels:
+        branch: "${BRANCH_NAME}"
+    stringData:
+      MONGODB_URI: "mongodb://admin:${MONGODB_ADMIN_PASSWORD}@${RESOURCE_NAME_PREFIX}-internal.${SERVICE_NAMESPACE}.svc.cluster.local:27017"
+ 
+  - kind: DeploymentConfig
+    apiVersion: v1
+    metadata:
+      name: "${RESOURCE_NAME_PREFIX}-exporter"
+      labels:
+        app: "${BRANCH_NAME}"
+        branch: "${BRANCH_NAME}"
+    spec:
+      serviceName: "${RESOURCE_NAME_PREFIX}-exporter-internal"
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            name: "${RESOURCE_NAME_PREFIX}-exporter"
+            branch: "${BRANCH_NAME}"
+            sdasi/metrics: "true"
+            sdasi/metrics_port: "9216"
+            sdasi/metrics_path: "metrics"
+            sdasi/mongometrics: "true"
+        spec:  
+          containers:
+            - name: exporter-container
+              image: "${EXPORTER_IMAGE}"
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 9001
+                  protocoll: tcp
+              restartPolicy: Always
+              env:
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${RESOURCE_NAME_PREFIX}-exporter"
+                      key: MONGODB_URI
+      resources:
+        requests:
+          memory: "25Mi"
+          cpu: "10m"
+        limits:
+          memory: "250Mi"
+          cpu: "100m"
+    updateStrategy:
+      type: RollingUpdate

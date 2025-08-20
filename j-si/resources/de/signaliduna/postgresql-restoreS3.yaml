@@ -1,0 +1,89 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: postgresql-apply
+  annotations:
+    description: "PostgreSQL job to restore backups from S3."
+    tags: "database,postgresql,patroni,configuration,restore,S3"
+parameters:
+  - name: CLUSTER_NAME
+    displayName: Name of the cluster.
+    description: Name of the PostgreSQL Cluster and CRD.
+    required: true
+
+  - name: BRANCH_NAME
+    displayName: Deployment branch.
+    description: Name of the branch that deployed this cluster.
+    required: true
+
+  - name: APP_DATABASE_NAME
+    displayName: Application database name
+    description: Name of the database that will be created.
+    value: appdb
+    required: true
+
+  - name: RESTORE_DOCKER_IMAGE_PATH
+    displayName: Docker image of the restore / apply pod
+    description: Path and name of the PostgreSQL restore / apply Docker image to run.
+    required: true
+
+  - name: MC_RESTORE_PATH
+    displayName: Backup Path (inside S3 bucket)
+    description: Path to the backup folder (e.g. 20191129-0056).
+    required: true
+
+  - name: RESTORE_BACKOFF_LIMIT
+    displayName: Number of recurrent tries
+    description: How often to try to apply the SQL or restore before giving up.
+    value: "4"
+    required: true
+
+objects:
+
+- apiVersion: batch/v1
+  kind: Job
+  metadata:
+    name: "${CLUSTER_NAME}-restore-s3"
+    labels:
+      branch: "${BRANCH_NAME}"
+      component: restore
+  spec:
+    template:
+      spec:
+        containers:
+        - image: "${RESTORE_DOCKER_IMAGE_PATH}"
+          name: restore
+          env:
+          - name: PGHOST
+            value: "pg-${CLUSTER_NAME}"
+          - name: PGUSER
+            valueFrom:
+              secretKeyRef:
+                name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                key: username
+          - name: PGDATABASE
+            value: "postgres"
+          - name: PGPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                key: password
+          - name: PG_RESTORE_RESTORE_ARGS
+            value: "--clean --create --dbname postgres"
+          - name: MC_URL
+            value: "https://minio-${CLUSTER_NAME}:9000"
+          - name: MC_CMD_OPTIONS
+            value: "--insecure"
+          - name: MC_BUCKET_NAME
+            value: "pgdumps"
+          - name: MC_ACCESS_KEY
+            value: "postgres"
+          - name: MC_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                key: password
+          - name: MC_RESTORE_PATH
+            value: "${MC_RESTORE_PATH}"
+        restartPolicy: Never
+    backoffLimit: ${{RESTORE_BACKOFF_LIMIT}}

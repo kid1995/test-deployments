@@ -1,0 +1,35 @@
+{
+  "Change": {
+    "CustomerVisible": false,
+    "EffectOfNotImplementing": ["Die Änderung (neues Feature/Bugfix) ist nicht verfügbar."],
+    "Impact": "2",
+    "RequestedEndDate": "AUTOMATICALLY_FILLED",
+    "Scope": ["AUTOMATICALLY_FILLED"],
+    "Service": "AUTOMATICALLY_FILLED",
+    "Urgency": "3",
+    "close": {},
+    "description.structure": {
+      "Description": ["AUTOMATICALLY_FILLED"]
+    },
+    "header": {
+      "ApprovalStatus": "approved",
+      "AssignedTo": "AUTOMATICALLY_FILLED",
+      "AssignmentGroup": "AUTOMATICALLY_FILLED",
+      "Category": "Standard Change",
+      "ChangeCoordinator": "AUTOMATICALLY_FILLED",
+      "InitiatedBy": "AUTOMATICALLY_FILLED",
+      "ChangeModel": "AUTOMATICALLY_FILLED",
+      "Open": true,
+      "Phase": "Registration and Categorization",
+      "Priority": "2",
+      "Reason": "vendor",
+      "RiskAssessment": "0",
+      "Status": "initial",
+      "Subcategory": "SDA",
+      "Title": "AUTOMATICALLY_FILLED"
+    },
+    "middle": {
+      "Assets": ["AUTOMATICALLY_FILLED"]
+    }
+  }
+}

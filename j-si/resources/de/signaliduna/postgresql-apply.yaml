@@ -1,0 +1,113 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: postgresql-apply
+  annotations:
+    description: "PostgreSQL job to apply backups and sql files to a database."
+    tags: "database,postgresql,patroni,configuration,restore,apply"
+parameters:
+  - name: CLUSTER_NAME
+    displayName: Name of the cluster.
+    description: Name of the PostgreSQL Cluster and CRD.
+    required: true
+
+  - name: BRANCH_NAME
+    displayName: Deployment branch.
+    description: Name of the branch that deployed this cluster.
+    required: true
+
+  - name: APP_DATABASE_NAME
+    displayName: Application database name
+    description: Name of the database that will be created.
+    value: appdb
+    required: true
+
+  - name: APP_DATABASE_OWNER
+    displayName: Database owner
+    description: Owner of the Database / application user.
+    value: appuser
+    required: true
+
+  - name: RESTORE_DOCKER_IMAGE_PATH
+    displayName: Docker image of the restore / apply pod
+    description: Path and name of the PostgreSQL restore / apply Docker image to run.
+    required: true
+
+  - name: RESTORE_JOB_NAME_SUFFIX
+    displayName: Job name suffix
+    description: "Suffix (description) that be added to the jobs name."
+    value: "0"
+    required: false
+
+  - name: RESTORE_DOWNLOAD_URL
+    displayName: URL of sql files and dumps to be applied
+    description: "URL of the archive (tar.gz) to be downloaded and extracted."
+    required: false
+
+  - name: RESTORE_DOWNLOAD_USER
+    displayName: Basic Auth User
+    description: "Username for Basic Auth authentication."
+    required: false
+
+  - name: RESTORE_DOWNLOAD_PASSWORD
+    displayName: Basic Auth Password
+    description: "Password for Basic Auth authentication."
+    required: false
+
+  - name: PSQL_RESTORE_ARGS
+    displayName: psql command line arguments
+    description: Command line arguments that will used when restoring SQL files.
+    value: "--echo-all -v ON_ERROR_STOP=1"
+    required: false
+
+  - name: PG_RESTORE_RESTORE_ARGS
+    displayName: pg_restore command line arguments
+    description: Command line arguments that will used when restoring dumps using pg_restore.
+    value: "--jobs 1"
+    required: false
+
+  - name: RESTORE_BACKOFF_LIMIT
+    displayName: Number of recurrent tries 
+    description: How oftern to trie to apply the SQL or restore before giving up.
+    value: "4"
+    required: true
+
+objects:
+
+- apiVersion: batch/v1
+  kind: Job
+  metadata:
+    name: "${CLUSTER_NAME}-restore-${RESTORE_JOB_NAME_SUFFIX}"
+    labels:
+      branch: "${BRANCH_NAME}"
+      component: restore
+  spec:
+    template:
+      spec:
+        containers:
+        - image: "${RESTORE_DOCKER_IMAGE_PATH}"
+          name: restore
+          env:
+          - name: RESTORE_DOWNLOAD_URL
+            value: "${RESTORE_DOWNLOAD_URL}"
+          - name: RESTORE_DOWNLOAD_USER
+            value: "${RESTORE_DOWNLOAD_USER}"
+          - name: RESTORE_DOWNLOAD_PASSWORD
+            value: "${RESTORE_DOWNLOAD_PASSWORD}"
+          - name: PGHOST
+            value: "pg-${CLUSTER_NAME}"
+          - name: PGUSER
+            value: "${APP_DATABASE_OWNER}"
+          - name: PGDATABASE
+            value: "${APP_DATABASE_NAME}"
+          - name: PGPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "${APP_DATABASE_OWNER}.pg-${CLUSTER_NAME}.credentials"
+                key: password
+          - name: PSQL_RESTORE_ARGS
+            value: "${PSQL_RESTORE_ARGS}"
+          - name: PG_RESTORE_RESTORE_ARGS
+            value: "${PG_RESTORE_RESTORE_ARGS}"
+        restartPolicy: Never
+    backoffLimit: ${{RESTORE_BACKOFF_LIMIT}}

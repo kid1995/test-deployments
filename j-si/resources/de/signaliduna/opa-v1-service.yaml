@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: ${RESOURCE_NAME}-template
+
+parameters:
+  - description: The full name and tag of the image to be used for the deployment.
+    displayName: Full docker image name.
+    name: IMAGE_NAME
+    required: true
+
+  - description: Name of origin branch
+    displayName: Branch name
+    name: BRANCH_NAME
+    required: true
+
+  - description: Commit ID of HEAD
+    displayName: Commit ID
+    name: COMMIT_ID
+    required: true
+
+  - description: Unique Name of openshift ressource.
+    displayName: Name of openshift ressource.
+    name: RESOURCE_NAME
+    required: true
+
+  - description: The cluster url including the project subdomain.
+    displayName: Project url.
+    name: PROJECT_URL
+    required: true
+
+  - description: Number of replicas / pods to run at all times (affects quotas!)
+    displayName: Number of replicas
+    name: NUM_REPLICAS
+    required: true
+
+  - description: The OPA environment specific data file
+    name: ENV_DATA_FILE
+    required: false
+
+  - description: The OPA environment specific log level
+    name: ENV_LOG_LEVEL
+    value: "error"
+    required: false
+
+  - description: Name of stage property config map
+    displayName: Config map name
+    name: STAGE_PROPERTY_MAP
+    required: true
+
+  - description: Minimum/guaranteed amount of CPU cores required for scheduling (affects quotas!)
+    displayName: Guaranteed amount of CPU cores
+    name: REQUESTS_CPU
+    required: true
+
+  - description: Minimum/guaranteed amount of memory required for scheduling (affects quotas!)
+    displayName: Guaranteed amount of memory
+    name: REQUESTS_MEMORY
+    required: true
+
+  - description: Maximum amount of CPU core usage allowed per pod (best effort and capped)
+    displayName: Maximum amount of CPU usage
+    name: LIMITS_CPU
+    required: true
+
+  - description: Maximum amount of memory usage allowed per pod (OOM kill)
+    displayName: Maximum amount of memory usage
+    name: LIMITS_MEMORY
+    required: true
+
+objects:
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      name: ${RESOURCE_NAME}
+      labels:
+        app: ${BRANCH_NAME}
+        branch: ${BRANCH_NAME}
+        commit-id: ${COMMIT_ID}
+    spec:
+      replicas: ${{NUM_REPLICAS}}
+      selector:
+        config: ${RESOURCE_NAME}
+        branch: ${BRANCH_NAME}
+      template:
+        metadata:
+          labels:
+            config: ${RESOURCE_NAME}
+            branch: ${BRANCH_NAME}
+            sdasi/metrics: "true"
+            sdasi/metrics_port: "8181"
+            sdasi/metrics_path: "metrics"
+        spec:
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: config
+                          operator: In
+                          values:
+                            - ${RESOURCE_NAME}
+                    topologyKey: datacenter
+                  weight: 100
+          containers:
+            - name: ${RESOURCE_NAME}
+              image: ${IMAGE_NAME}
+              command:
+                - "/opa"
+                - "run"
+                - "--ignore=*test.rego"
+                - "--server"
+                - "--log-level"
+                - "${ENV_LOG_LEVEL}"
+                - "--disable-telemetry"
+                - "--addr=0.0.0.0:8181"
+                - "/policy"
+                - "${ENV_DATA_FILE}"
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8181
+                  protocol: TCP
+              resources:
+                limits:
+                  cpu: "${LIMITS_CPU}"
+                  memory: "${LIMITS_MEMORY}"
+                requests:
+                  cpu: "${REQUESTS_CPU}"
+                  memory: "${REQUESTS_MEMORY}"
+              readinessProbe:
+                httpGet:
+                  path: /health?bundles
+                  scheme: HTTP
+                  port: 8181
+                initialDelaySeconds: 20
+                periodSeconds: 60
+              livenessProbe:
+                httpGet:
+                  scheme: HTTP
+                  port: 8181
+                initialDelaySeconds: 5
+                periodSeconds: 5
+          securityContext:
+            supplementalGroups: [5555]
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${BRANCH_NAME}-opa
+      labels:
+        branch: ${BRANCH_NAME}
+    spec:
+      ports:
+        - name: 8181-tcp
+          port: 8181
+          protocol: TCP
+          targetPort: 8181
+      selector:
+        config: ${RESOURCE_NAME}
+        branch: ${BRANCH_NAME}

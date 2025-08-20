@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: postgresql-dumps
+parameters:
+  - name: CLUSTER_NAME
+    displayName: Name of the cluster.
+    description: Name of the PostgreSQL Cluster and CRD.
+    required: true
+
+  - name: BRANCH_NAME
+    displayName: Deployment branch.
+    description: Name of the branch that deployed this cluster.
+    value: "unset"
+    required: false
+
+  - name: APP_DATABASE_NAME
+    displayName: Application database name
+    description: Name of the database that will be created.
+    required: true
+
+  - name: PGDUMP_DOCKER_IMAGE_PATH
+    displayName: Docker image of the admin pod
+    description: Path and name of the PostgreSQL Admin Docker image to run.
+    required: true
+
+  - name: BACKUP_SCHEDULE
+    displayName: "BACKUP_SCHEDULE"
+    description: "Cron-pattern that will be used for the internal backup schedule (default:0 3 * * * (daily at 03:00 AM))"
+    value: "0 3 * * *"
+
+  - name: STORAGE_CLASS
+    displayName: "Storage Class for backups (temporary)"
+    value: "nfs"
+    required: true
+
+  - name: CAPACITY
+    displayName: "Capacity of the temporary pgdump volume."
+    required: true
+
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      annotations:
+      name: "pgdump-${CLUSTER_NAME}"
+      labels:
+        name: "pgdump-${CLUSTER_NAME}"
+        branch: "${BRANCH_NAME}"
+    spec:
+      accessModes:
+      - ReadWriteMany
+      resources:
+        requests:
+          storage: ${CAPACITY}
+      storageClassName: ${STORAGE_CLASS}
+
+  - kind: CronJob
+    apiVersion: batch/v1beta1
+    metadata:
+      name: "pgdump-${CLUSTER_NAME}"
+      labels:
+        name: "pgdump-${CLUSTER_NAME}"
+        branch: "${BRANCH_NAME}"
+    spec:
+      schedule: "${BACKUP_SCHEDULE}"
+      startingDeadlineSeconds: 240
+      jobTemplate:
+        metadata:
+          labels:
+            name: "pgdump-${CLUSTER_NAME}"
+            application: pgdump
+            branch: "${BRANCH_NAME}"
+        spec:
+          template:
+            spec:
+              containers:
+                - name: pgdump
+                  image: "${PGDUMP_DOCKER_IMAGE_PATH}"
+                  env:
+                    - name: PGUSER
+                      valueFrom:
+                        secretKeyRef:
+                          name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                          key: username
+                    - name: PGPASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                          key: password
+                    - name: PGBACKUP_DATABASES
+                      value: "${APP_DATABASE_NAME}"
+                    - name: PGHOST
+                      value: "pg-${CLUSTER_NAME}"
+                    - name: MC_ACCESS_KEY
+                      valueFrom:
+                        secretKeyRef:
+                          name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                          key: username
+                    - name: MC_SECRET_KEY
+                      valueFrom:
+                        secretKeyRef:
+                          name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                          key: password
+                    - name: MC_URL
+                      value: "https://minio-${CLUSTER_NAME}:9000/"
+                    - name: MC_BUCKET_NAME
+                      value: "pgdumps"
+                    - name: BACKUP_METHOD
+                      value: "S3"
+                    - name: MINIO_CMD_OPTIONS
+                      value: "--insecure"
+                  resources:
+                    requests:
+                      cpu: "100m"
+                      memory: "64Mi"
+                    limits:
+                      cpu: "4000m"
+                      memory: "512Mi"
+                  volumeMounts:
+                    - mountPath: "/pgdumps"
+                      name: postgresql-dump-data-volume
+              volumes:
+                - name: postgresql-dump-data-volume
+                  persistentVolumeClaim:
+                    claimName: "pgdump-${CLUSTER_NAME}"
+              restartPolicy: "Never"

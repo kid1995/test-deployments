@@ -1,0 +1,36 @@
+{
+  "Change": {
+    "CustomerVisible": false,
+    "EffectOfNotImplementing": ["EffectOfNotImplementing"],
+    "Impact": "2",
+    "RequestedEndDate": "AUTOMATICALLY_FILLED",
+    "Scope": ["Scope"],
+    "Service": "AUTOMATICALLY_FILLED",
+    "Urgency": "3",
+    "close": {},
+    "description.structure": {
+      "Description": ["Description"],
+      "ImplementationPlan": ["ImplementationPlan"]
+    },
+    "header": {
+      "ApprovalStatus": "approved",
+      "AssignmentGroup": "AEAV-97540",
+      "Category": "Standard Change",
+      "ChangeCoordinator": "AUTOMATICALLY_FILLED",
+      "ChangeModel": "AUTOMATICALLY_FILLED",
+      "Open": true,
+      "Phase": "Registration and Categorization",
+      "Priority": "2",
+      "Reason": "vendor",
+      "RiskAssessment": "0",
+      "Status": "initial",
+      "Subcategory": "SDA",
+      "Title": "Title",
+      "PlannedStart": "AUTOMATICALLY_FILLED",
+      "PlannedEnd": "AUTOMATICALLY_FILLED"
+    },
+    "middle": {
+      "Assets": ["AUTOMATICALLY_FILLED"]
+    }
+  }
+}   

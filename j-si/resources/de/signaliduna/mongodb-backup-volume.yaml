@@ -1,0 +1,37 @@
+kind: Template
+apiVersion: v1
+metadata:
+    name: ${BRANCH_NAME}-mongodb-backup-claim
+    description: "MongoDB Backup PVC"
+    iconClass: "icon-mongodb"
+    tags: "database,mongodb,backup"
+parameters:
+  - name: BRANCH_NAME 
+    displayName: "Branch name"
+    description: "Name of origin branch"
+    required: true
+
+  - name: STORAGE_SIZE
+    displayName: "Storage size"
+    description: "Max size of the database"
+    required: true
+
+  - name: FOR_REDEPLOYMENT_SUFFIX
+    displayName: "Suffix for Redeployment-Name"
+    description: "Suffix for Redeployment-Name"
+    required: false
+  
+objects:
+  - kind: "PersistentVolumeClaim"
+    apiVersion: v1
+    metadata:
+      name: ${BRANCH_NAME}-mongobackup${FOR_REDEPLOYMENT_SUFFIX}
+      labels: 
+        branch: "${BRANCH_NAME}"
+    spec:
+      accessModes:
+        - "ReadWriteMany"
+      resources:
+        requests:
+          storage: "${STORAGE_SIZE}"
+      storageClassName: backup-nfs

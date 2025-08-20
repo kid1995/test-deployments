@@ -1,0 +1,538 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: zap-advanced-scantype-config
+  labels:
+    app: securecodebox-stack
+data:
+  1-zap-advanced-scantype.yaml: |
+
+    global:
+      sessionName: scb-security-test
+      addonUpdate: true
+      addonInstall:
+        - pscanrulesBeta
+        - ascanrulesBeta
+      scripts: []
+
+    contexts:
+      # Name to be used to refer to this context in other jobs, mandatory
+      - name: scb-sda-context
+        # The top level url, mandatory, everything under this will be included
+        # An optional list of regexes to include
+        includePaths:
+          - "https?://.*\\..*.svc:.*"
+          - "https?://.*\\..*.svc/.*"
+          - "https?://.*\\..*.svc.cluster.local/.*"
+          - "https?://.*\\..*.svc.cluster.local:.*"
+        # An optional list of regexes to exclude
+        excludePaths:
+          - ".*socket\\.io.*"
+          - ".*\\.png"
+          - ".*\\.jpeg"
+          - ".*\\.jpg"
+          - ".*\\.woff"
+          - ".*\\.woff2"
+          - ".*\\.ttf"
+          - ".*\\.ico"
+          - ".*\\.css"
+        alertFilters:
+          # ignore a bunch of rules to reduce number of findings in tests
+          - ruleId: 10106
+            # https://www.zaproxy.org/docs/alerts/10106/
+            newLevel: "False Positive"
+        # Auth Credentials for the scanner to access the application
+        authentication:
+          # -- Currently supports "basic-auth", "form-based", "json-based", "script-based"
+          type: "script-based"
+          # -- Optional, only mandatory if zapConfiguration.contexts[0].authentication.type: "script-based". More ZAP details about 'script based' authentication can be found here: https://www.zaproxy.org/docs/api/#script-based-authentication.
+          script-based:
+            # -- The name of the authentication script
+            scriptName: "scb-oidc-client-credentials-type.js"
+            name: "scb-oidc-client-credentials-type.js"
+            # -- Enables the script if true, otherwise false
+            enabled: true
+            # -- The type of script engine used. Possible values are: 'Graal.js', 'Oracle Nashorn' for Javascript and 'Mozilla Zest' for Zest Scripts
+            scriptEngine: "Oracle Nashorn"
+            engine: "Oracle Nashorn"
+            # -- Must be a full path to the script file inside the ZAP container (corresponding to the configMap FileMount)
+            scriptFilePath: "/home/zap/.ZAP_D/scripts/scripts/authentication/scb-oidc-client-credentials-type.js"
+            filePath: "/home/zap/.ZAP_D/scripts/scripts/authentication/scb-oidc-client-credentials-type.js"
+            # -- A short description for the script.
+            description: "This is an OIDC authentication script used for the Resource Owner Password Flow."
+            arguments:
+              URL: "https://employee.login.int.signal-iduna.org:8095/auth/token"
+              grantType: "client_credentials"
+          # Indicates if the current Zap User Session is based on a valid authentication (loggedIn) or not (loggedOut)
+          verification:
+            isLoggedOutIndicator: '(.*Credentials are required to access this resource.*)|(.*Verifying token failed*)'
+        # -- The optional ZAP session configuration
+        session:
+          # -- The ZAP Session type indicates how Zap identifies sessions. Currently supports the following types: "scriptBasedSessionManagement", "cookieBasedSessionManagement", "httpAuthSessionManagement"
+          type: "scriptBasedSessionManagement"
+          # -- Optional, only mandatory if zapConfiguration.contexts[0].session.type: "scriptBasedSessionManagement". Additional configrations for the session type "scriptBasedSessionManagement"
+          scriptBasedSessionManagement:
+            # -- The name of the session script to be used.
+            scriptName: "scb-oidc-session-management.js"
+            name: "scb-oidc-session-management.js"
+            # -- Enables the script if true, otherwise false
+            enabled: true
+            # -- The type of script engine used. Possible values are: 'Graal.js', 'Oracle Nashorn' for Javascript and 'Mozilla Zest' for Zest Scripts
+            scriptEngine: "Oracle Nashorn"
+            engine: "Oracle Nashorn"
+            # --  Must be a full path to the script file inside the ZAP container (corresponding to the configMap FileMount)
+            scriptFilePath: "/home/zap/.ZAP_D/scripts/scripts/session/scb-oidc-session-management.js"
+            filePath: "/home/zap/.ZAP_D/scripts/scripts/session/scb-oidc-session-management.js"
+            # --  An optional description used for the script.
+            description: "This is a description for the SCB OIDC Script."
+
+    apis:
+      - name: scb-sda-openapi
+        # -- The Name of the context (zapConfiguration.contexts[x].name) to spider, default: first context available.
+        context: scb-sda-context
+        # -- format of the API ('openapi', 'grapql', 'soap')
+        format: openapi
+        # -- Relative path for the given targetUrl. mutually exclusive to the URL configuration.
+        path: /api/swagger.json
+
+    spiders:
+      - name: scb-sda-spider
+        # String: Name of the context to spider, default: first context
+        context: scb-sda-context
+        # String: Name of the user to authenticate with and used to spider
+        user: sda-apiscan-user
+        # Int: The max time in minutes the spider will be allowed to run for, default: 0 unlimited
+        maxDuration: 10
+        # Int: The maximum tree depth to explore, default 5
+        maxDepth: 5
+        # Int: The maximum number of children to add to each node in the tree                     
+        maxChildren: 10
+        # String: The user agent to use in requests, default: '' - use the default ZAP one               
+        userAgent: "secureCodeBox / ZAP Spider"
+
+    scanners:
+      - name: scb-sda-scan
+        # String: Name of the context to attack, default: first context
+        context: scb-sda-context
+        # String: Name of the user to authenticate with and used to scan
+        user: sda-apiscan-user
+        # Int: The max time in minutes any individual rule will be allowed to run for, default: 0 unlimited
+        maxRuleDurationInMins: 5
+        # Int: The max time in minutes the active scanner will be allowed to run for, default: 0 unlimited          
+        maxScanDurationInMins: 60
+        # Int: The max number of threads per host, default: 2
+        threadPerHost: 2
+        # Int: The delay in milliseconds between each request, use to reduce the strain on the target, default 0
+        delayInMs: 0
+        # Bool: If set will add an extra query parameter to requests that do not have one, default: false
+        addQueryParam: false
+        # Bool: If set then automatically handle anti CSRF tokens, default: false
+        handleAntiCSRFTokens: false
+        # Bool: If set then the relevant rule Id will be injected into the X-ZAP-Scan-ID header of each request, default: false           
+        injectPluginIdInHeader: false
+        # Bool: If set then the headers of requests that do not include any parameters will be scanned, default: false
+        scanHeadersAllRequests: false
+---
+apiVersion: "execution.securecodebox.io/v1"
+kind: ParseDefinition
+metadata:
+  name: "zap-advanced-xml"
+  labels:
+    app: securecodebox-stack
+spec:
+  image: "hub.docker.system.local/securecodebox/parser-zap:3.15.2"
+  # 21.600s = 6h
+  ttlSecondsAfterFinished: 21600
+  env: []
+---
+apiVersion: "execution.securecodebox.io/v1"
+kind: ScanType
+metadata:
+  name: "zap-advanced-scan"
+  labels:
+    app: securecodebox-stack
+spec:
+  extractResults:
+    type: zap-advanced-xml
+    location: "/home/securecodebox/zap-results.xml"
+  jobTemplate:
+    spec:
+      # 21.600s = 6h
+      ttlSecondsAfterFinished: 21600
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: Never
+          hostAliases:
+            - hostnames:
+                - employee.login.int.signal-iduna.org
+              ip: 127.0.0.1
+          containers:
+            - name: zap-advanced-scan
+              image: "hub.docker.system.local/securecodebox/scanner-zap-advanced:3.15.2"
+              imagePullPolicy: IfNotPresent
+              command:
+                - "python3"
+                - "-m"
+                - "zapclient"
+                - "--report-type"
+                - "XML"
+                - "--zap-url"
+                - "localhost:8080"
+                - "--config-folder"
+                - "/home/securecodebox/configs/"
+                - "--output-folder"
+                - "/home/securecodebox/"
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: 2Gi
+                requests:
+                  cpu: 250m
+                  memory: 1Gi
+              securityContext: {}
+              env: []
+              envFrom: []
+              volumeMounts:
+                - mountPath: /home/securecodebox/configs/1-zap-advanced-scantype.yaml
+                  name: zap-advanced-scantype-config
+                  subPath: 1-zap-advanced-scantype.yaml
+                  readOnly: true
+                - mountPath: /home/securecodebox/configs/2-zap-advanced-scantype-secret.yaml
+                  name: zap-advanced-scantype-secret
+                  subPath: 2-zap-advanced-scantype-secret.yaml
+                  readOnly: true
+            - name: zap-sidecar
+              image: "hub.docker.system.local/owasp/zap2docker-stable:2.11.1"
+              imagePullPolicy: IfNotPresent
+              command:
+                - "zap.sh"
+                - "-Xms1536m"
+                - "-Xmx1536m"
+                - "-daemon"
+                - "-port"
+                - "8080"
+                - "-host"
+                - "0.0.0.0"
+                - "-addoninstall"
+                - "pscanrulesBeta"
+                - "-addoninstall"
+                - "ascanrulesBeta"
+                - "-config"
+                - "database.recoverylog=false" # Tune ZAP, DB recovery is not needed here
+                - "-config"
+                - "connection.timeoutInSecs=120" # Tune ZAP timeout by default to be 2minutes
+                # Disable API Key, ZAP will only accept connection from localhost and 127.0.0.1 by default.
+                - "-config"
+                - "api.disablekey=true" # Disable API Key
+                - "-dir"
+                - "/tmp"
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: 2Gi
+                requests:
+                  cpu: 250m
+                  memory: 1Gi
+              securityContext: {}
+              env: []
+              envFrom: []
+              volumeMounts:
+                - mountPath: /home/securecodebox/
+                  name: scan-results
+                  readOnly: false
+                - mountPath: /home/zap/.ZAP_D/scripts/scripts/authentication/
+                  name: zap-scripts-authentication
+                  readOnly: true
+                - mountPath: /home/zap/.ZAP_D/scripts/scripts/session/
+                  name: zap-scripts-session
+                  readOnly: true
+              ports:
+                - containerPort: 8080
+            - name: socat
+              image: hub.docker.system.local/securecodebox/socat:1.0.2
+              args:
+                - tcp-listen:8095,fork,reuseaddr
+                - proxy:mw-proxy-lb-alt.system.local:employee.login.int.signal-iduna.org:443,proxyport=9090
+              imagePullPolicy: IfNotPresent
+              ports:
+                - containerPort: 8095
+                  name: http
+              resources:
+                limits:
+                  cpu: 100m
+                  memory: 100Mi
+                requests:
+                  cpu: 50m
+                  memory: 50Mi
+          volumes:
+            - configMap:
+                name: zap-advanced-scantype-config
+              name: zap-advanced-scantype-config
+            - secret:
+                secretName: zap-advanced-scantype-secret
+                optional: true
+              name: zap-advanced-scantype-secret
+            - configMap:
+                name: zap-scripts-authentication
+              name: zap-scripts-authentication
+            - configMap:
+                name: zap-scripts-session
+              name: zap-scripts-session
+---
+apiVersion: "execution.securecodebox.io/v1"
+kind: ScanCompletionHook
+metadata:
+  name: persistence-defectdojo
+  labels:
+    helm.sh/chart: persistence-defectdojo-3.15.2
+    app.kubernetes.io/name: persistence-defectdojo
+    app.kubernetes.io/instance: persistence-defectdojo
+    app.kubernetes.io/version: "1.12.0"
+    type: Unstructured
+spec:
+  type: ReadAndWrite
+  image: "hub.docker.system.local/securecodebox/hook-persistence-defectdojo:3.15.2"
+  imagePullPolicy: "IfNotPresent"
+  env:
+    - name: DEFECTDOJO_URL
+      value: "https://defectdojo.si.sda-se.io"
+    - name: DEFECTDOJO_LOW_PRIVILEGED_MODE
+      value: "true"
+    - name: DEFECTDOJO_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: si-defectdojo-credentials
+          key: username
+    - name: DEFECTDOJO_APIKEY
+      valueFrom:
+        secretKeyRef:
+          name: si-defectdojo-credentials
+          key: token
+    - name: DEFECTDOJO_USER_ID
+      valueFrom:
+        secretKeyRef:
+          name: si-defectdojo-credentials
+          key: uid
+    - name: _JAVA_OPTIONS
+      value: "-Djavax.net.ssl.trustStore=/tmp/cacerts -Dhttp.proxyHost=mw-proxy-lb-alt.system.local -Dhttp.proxyPort=9090 -Dhttp.nonProxyHosts=localhost|127.0.0.1|*.system.local|*.system-a.local|*.svc|*.cluster.local|10.*|172.*|192.168.* -Dhttps.proxyHost=mw-proxy-lb-alt.system.local -Dhttps.proxyPort=9090 -Dhttps.nonProxyHosts=localhost|127.0.0.1|*.system.local|*.system-a.local|*.svc|*.cluster.local|10.*|172.*|192.168.*"
+  volumes:
+    - name: si-certs-java
+      configMap:
+        name: cacerts
+  volumeMounts:
+    - name: si-certs-java
+      readOnly: true
+      mountPath: /tmp/cacerts
+      subPath: cacerts
+---
+# Source: notification/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "securecodebox-email-notification-config"
+  labels:
+    helm.sh/chart: notification-3.15.2
+    app.kubernetes.io/name: notification-email
+    app.kubernetes.io/instance: securecodebox-email-notification
+    app.kubernetes.io/managed-by: Helm
+data:
+  notification-channel.yaml: |
+
+    # actual email used is overwritten by namespace / service annotations
+    - endPoint: void@signal-iduna.de
+      name: email
+      rules:
+      - matches:
+          anyOf:
+          - attributes:
+              defectdojo.org/original-finding: null
+              duplicate: false
+              falsePositive: false
+              riskAccepted: false
+            severity: MEDIUM
+          - attributes:
+              defectdojo.org/original-finding: null
+              duplicate: false
+              falsePositive: false
+              riskAccepted: false
+            severity: HIGH
+          - attributes:
+              defectdojo.org/original-finding:
+                attributes:
+                  falsePositive: false
+                  riskAccepted: false
+              duplicate: true
+              falsePositive: false
+              riskAccepted: false
+            severity: MEDIUM
+          - attributes:
+              defectdojo.org/original-finding:
+                attributes:
+                  falsePositive: false
+                  riskAccepted: false
+              duplicate: true
+              falsePositive: false
+              riskAccepted: false
+            severity: HIGH
+      skipNotificationOnZeroFindings: true
+      template: email
+      type: email
+---
+# Source: notification/templates/configmap.yaml
+# SPDX-FileCopyrightText: the secureCodeBox authors
+#
+# SPDX-License-Identifier: Apache-2.0
+---
+# Source: notification/templates/notification-hook.yaml
+# SPDX-FileCopyrightText: the secureCodeBox authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: "execution.securecodebox.io/v1"
+kind: ScanCompletionHook
+metadata:
+  name: securecodebox-email-notification
+  labels:
+    helm.sh/chart: notification-3.15.2
+    app.kubernetes.io/name: notification-email
+    app.kubernetes.io/instance: securecodebox-email-notification
+    app.kubernetes.io/managed-by: Helm
+    securecodebox.io/notification-type: mail
+spec:
+  priority: 0
+  type: ReadOnly
+  imagePullPolicy: "IfNotPresent"
+  image: "hub.docker.system.local/securecodebox/hook-notification:3.15.2"
+  ttlSecondsAfterFinished: 300
+  volumes:
+    - name: securecodebox-email-notification-config
+      configMap:
+        name: securecodebox-email-notification-config
+
+  volumeMounts:
+    - name: securecodebox-email-notification-config
+      mountPath: /home/app/config
+      readOnly: true
+
+  env:
+    - name: SMTP_USERNAME
+      valueFrom:
+        secretKeyRef:
+          key: si-svc-sda-securecod_username
+          name: si-defectdojo-notification-credentials
+    - name: SMTP_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          key: si-svc-sda-securecod_password
+          name: si-defectdojo-notification-credentials
+    - name: SMTP_CONFIG
+      value: "smtp://$(SMTP_USERNAME):$(SMTP_PASSWORD)@smtp.system.local:587/?authMethod=LOGIN"
+    - name: EMAIL_FROM
+      value: "si-svc-sda-securecod@signal-iduna.de"
+  affinity: {}
+  tolerations: []
+---
+# Source: notification/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "securecodebox-DEFINEyournotificationSOLUTIONhere-notification-config"
+  labels:
+    helm.sh/chart: notification-3.15.2
+    app.kubernetes.io/name: notification-DEFINEyournotificationSOLUTIONhere
+    app.kubernetes.io/instance: securecodebox-DEFINEyournotificationSOLUTIONhere-notification
+    app.kubernetes.io/managed-by: Helm
+data:
+  notification-channel.yaml: |
+
+    - endPoint: "https://DEFINEyournotificationSOLUTIONhere.TLD"
+      name: DEFINEyourchatSOLUTIONhere-chat
+      rules:
+      - matches:
+          anyOf:
+          - attributes:
+              defectdojo.org/original-finding: null
+              duplicate: false
+              falsePositive: false
+              riskAccepted: false
+            severity: MEDIUM
+          - attributes:
+              defectdojo.org/original-finding: null
+              duplicate: false
+              falsePositive: false
+              riskAccepted: false
+            severity: HIGH
+          - attributes:
+              defectdojo.org/original-finding:
+                attributes:
+                  falsePositive: false
+                  riskAccepted: false
+              duplicate: true
+              falsePositive: false
+              riskAccepted: false
+            severity: MEDIUM
+          - attributes:
+              defectdojo.org/original-finding:
+                attributes:
+                  falsePositive: false
+                  riskAccepted: false
+              duplicate: true
+              falsePositive: false
+              riskAccepted: false
+            severity: HIGH
+      skipNotificationOnZeroFindings: true
+      template: DEFINEyourchatSOLUTIONhere-chat
+      type: DEFINEyourchatSOLUTIONhere-chat
+---
+# Source: notification/templates/configmap.yaml
+# SPDX-FileCopyrightText: the secureCodeBox authors
+#
+# SPDX-License-Identifier: Apache-2.0
+---
+# Source: notification/templates/notification-hook.yaml
+# SPDX-FileCopyrightText: the secureCodeBox authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: "execution.securecodebox.io/v1"
+kind: ScanCompletionHook
+metadata:
+  name: securecodebox-DEFINEyournotificationSOLUTIONhere-notification
+  labels:
+    helm.sh/chart: notification-3.15.2
+    app.kubernetes.io/name: notification-DEFINEyournotificationSOLUTIONhere
+    app.kubernetes.io/instance: securecodebox-DEFINEyournotificationSOLUTIONhere-notification
+    app.kubernetes.io/managed-by: Helm
+    securecodebox.io/notification-type: DEFINEyournotificationSOLUTIONhere
+spec:
+  priority: 0
+  type: ReadOnly
+  imagePullPolicy: "IfNotPresent"
+  image: "hub.docker.system.local/securecodebox/hook-notification:3.15.2"
+  ttlSecondsAfterFinished: 300
+  volumes:
+    - name: securecodebox-DEFINEyournotificationSOLUTIONhere-notification-config
+      configMap:
+        name: securecodebox-DEFINEyournotificationSOLUTIONhere-notification-config
+
+  volumeMounts:
+    - name: securecodebox-DEFINEyournotificationSOLUTIONhere-notification-config
+      mountPath: /home/app/config
+      readOnly: true
+
+  env:
+    - name: DEFINEyourchatSOLUTIONhere_CHAT_DEFAULT_CHANNEL
+      value: "#securecodebox"
+    - name: DEFINEyourchatSOLUTIONhere_CHAT_USER_ID
+      valueFrom:
+        secretKeyRef:
+          key: secure_code_box_user_id
+          name: si-defectdojo-notification-credentials
+    - name: DEFINEyourchatSOLUTIONhere_CHAT_AUTH_TOKEN
+      valueFrom:
+        secretKeyRef:
+          key: secure_code_box_user_auth_token
+          name: si-defectdojo-notification-credentials
+  affinity: {}
+  tolerations: []

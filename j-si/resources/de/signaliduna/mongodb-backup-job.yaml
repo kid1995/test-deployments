@@ -1,0 +1,165 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: ${BRANCH_NAME}-mongodb-backup-template
+  annotations:
+    description: "Backup Example. You must have persistent volumes available in your cluster to use this template."
+    iconClass: "icon-backup"
+    tags: "database,mongodb,backup"
+parameters:
+  # please set this parameters whith "oc new-app -e <parameter_name>=<parameter_value> -f <this_file>"
+  - name: BRANCH_NAME 
+    displayName: "Branch name"
+    description: "Name of origin branch"
+    required: true
+
+  - name: JOB_NAME 
+    displayName: "Job name"
+    description: "Name of job"
+    required: true
+
+  - name: BACKUP_HOST
+    displayName: "MongoDB Database Name"
+    description: "MongoDB connect string to connect to the ReplSet in <RS>/<host>[:port][,<host>[:port]... notation"
+    required: true
+
+  - name: MONGODB_SECRETS_NAME
+    displayName: "MongoDB secrets name"
+    description: "Name of the secrets for the MongoDB"
+    required: true
+
+  - name: BACKUP_IMAGE
+    displayName: "Backup Container Image"
+    description: "A reference to a supported Bastiob container image."
+    required: true
+
+  - name: MONGO_BACKUP_VOLUME
+    displayName: "Backup-PVC"
+    description: "PVC with history"
+    required: true
+
+  - name: BACKUP_FOR_DEPLOYMENT_FLAG
+    displayName: "Flag: is backup for deployment"
+    description: "Flag: is backup for deployment"
+    required: true
+
+  - name: TARGET_SEGMENT
+    displayName: "TargetSegment"
+    description: "TargetSegment for the decision, if an its360 incident should be created for failures."
+    required: true
+
+  # optional parameters - you might want to change theese
+  - name: MONGODB_AUTHENTICATION_DATABASE
+    displayName: "MONGODB_AUTHENTICATION_DATABASE"
+    description: "MONGODB_AUTHENTICATION_DATABASE"
+    value: "admin"
+    required: true
+
+  - name: BACKUP_USER
+    displayName: "MongoDB Connection Username"
+    description: "Username for MongoDB user that will be used for accessing the database."
+    value: "admin"
+    required: true
+
+  # internal parameters - you don't need to set this parameters
+
+  - name: MONGODB_REDEPLOYMENT_BACKUP_BASEDIR
+    displayName: "MongoDB BASE DIR"
+    description: "Base directory for the backups"
+    value: "/var/lib/mongodb/redeployment"
+    
+  - name: MONGODB_NORMAL_BACKUP_BASEDIR
+    displayName: "MongoDB BASE DIR"
+    description: "Base directory for the backups"
+    value: "/var/lib/mongodb/backups"
+
+  - name: MEMORY_REQUEST
+    displayName: "Memory Request"
+    description: "request of memory the container will use."
+    required: true
+
+  - name: CPU_REQUEST
+    displayName: "CPU Request"
+    description: "request of CPU the container will use"
+    required: true
+
+  - name: MEMORY_LIMIT
+    displayName: "Memory Limit"
+    description: "Maximum amount of memory the container can use."
+    required: true
+
+  - name: CPU_LIMIT
+    displayName: "CPU Limit"
+    description: "Maximum CPU count the container can use"
+    required: true
+
+  - name: MONGODB_ADMIN_PASSWORD
+    displayName: "MongoDB Admin Password"
+    description: "Password for the database admin user."
+    generate: expression
+    from: "[a-zA-Z0-9]{16}"
+    required: true
+
+objects:
+  - kind: Job
+    apiVersion: batch/v1
+    metadata: 
+      name: "${BRANCH_NAME}-${JOB_NAME}"
+      labels:
+        branch: "${BRANCH_NAME}"
+    spec:
+      parallelism: 1
+      completions: 1
+      template:
+        metadata:
+          labels:
+            name: ${JOB_NAME}
+            branch: "${BRANCH_NAME}"
+        spec: 
+          containers:
+            - name: backup-container
+              image: "${BACKUP_IMAGE}"
+              imagePullPolicy: Always
+              volumeMounts:
+                - mountPath: "${MONGODB_REDEPLOYMENT_BACKUP_BASEDIR}"
+                  name: mongobackup-volume-rd
+                - mountPath: "${MONGODB_NORMAL_BACKUP_BASEDIR}"
+                  name: mongobackup-volume
+              env:
+                - name: BACKUP_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_ADMIN_USER
+                - name: BACKUP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${MONGODB_SECRETS_NAME}"
+                      key: MONGODB_ADMIN_PASSWORD
+                - name: BACKUP_HOST
+                  value: "${BACKUP_HOST}"
+                - name: MONGODB_NORMAL_BACKUP_BASEDIR
+                  value: "${MONGODB_NORMAL_BACKUP_BASEDIR}"
+                - name: MONGODB_REDEPLOYMENT_BACKUP_BASEDIR
+                  value: "${MONGODB_REDEPLOYMENT_BACKUP_BASEDIR}"
+                - name: MONGODB_AUTHENTICATION_DATABASE
+                  value: "${MONGODB_AUTHENTICATION_DATABASE}"
+                - name: BACKUP_FOR_DEPLOYMENT_FLAG
+                  value: "${BACKUP_FOR_DEPLOYMENT_FLAG}"
+                - name: TARGET_SEGMENT
+                  value: "${TARGET_SEGMENT}"
+              resources:
+                requests:
+                  memory: "${MEMORY_REQUEST}"
+                  cpu: "${CPU_REQUEST}"
+                limits:
+                  memory: "${MEMORY_LIMIT}"
+                  cpu: "${CPU_LIMIT}"
+          volumes:
+            - name: mongobackup-volume-rd
+              persistentVolumeClaim:
+                claimName: "${BRANCH_NAME}-mongobackup-rd"
+            - name: mongobackup-volume
+              persistentVolumeClaim:
+                claimName: "${MONGO_BACKUP_VOLUME}"
+          restartPolicy: "Never"

@@ -1,0 +1,133 @@
+
+apiVersion: v1
+kind: Template
+metadata:
+  name: minio
+parameters:
+  - name: CLUSTER_NAME 
+    displayName: "CLUSTER_NAME"
+    description: "Name der Minio-Instanz"
+    required: true
+
+  - name: BRANCH_NAME
+    displayName: "Branch"
+    description: "Deployment Branch"
+    value: "unset"
+
+  - name: MINIO_DOCKER_IMAGE_PATH
+    displayName: "Minio Image"
+    description: "Full path to the minio docker image."
+    required: true
+
+  - name: MINIO_VOLUMES
+    displayName: "MINIO_VOLUMES"
+    value: "/data/minio"
+
+  - name: MINIO_STORAGE_SIZE
+    displayName: "MINIO_STORAGE_SIZE"
+    value: 5Gi
+    required: true
+
+  - name: MINIO_STORAGE_CLASS
+    displayName: "Storage class"
+    value: "premium"
+    required: true
+
+objects:
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: minio-${CLUSTER_NAME}
+      labels:
+        application: minio
+        branch: ${BRANCH_NAME}
+      annotations:
+        auto-discovery.securecodebox.io/ignore: true
+    spec:
+      ports:
+      - port: 9000
+        name: s3
+      selector:
+        application: minio
+        branch: ${BRANCH_NAME}
+
+  - apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: minio-${CLUSTER_NAME}
+      labels:
+        application: minio
+        branch: ${BRANCH_NAME}
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          application: minio
+          branch: ${BRANCH_NAME}
+      template:
+        metadata:
+          labels:
+            application: minio
+            branch: ${BRANCH_NAME}
+        spec:
+          containers:
+          - name: minio
+            image: "${MINIO_DOCKER_IMAGE_PATH}"
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "1000m"
+                memory: "256Mi"
+            env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                  key: username
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "postgres.pg-${CLUSTER_NAME}.credentials"
+                  key: password
+            - name: MINIO_VOLUMES
+              value: ${MINIO_VOLUMES}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SERVICE_NAME
+              value: minio-${CLUSTER_NAME}
+            ports:
+            - containerPort: 9000
+              name: s3
+            readinessProbe:
+              httpGet:
+                path: /minio/health/ready
+                port: 9000
+                scheme: HTTPS
+              initialDeloaySeconds: 120
+              periodSeconds: 20
+            livenessProbe:
+              httpGet:
+                path: /minio/health/live
+                port: 9000
+                scheme: HTTPS
+              initialDeloaySeconds: 120
+              periodSeconds: 20
+            volumeMounts:
+            - name: data
+              mountPath: ${MINIO_VOLUMES}
+      volumeClaimTemplates:
+      - metadata:
+          name: data
+        spec:
+          accessModes: [ "ReadWriteOnce" ]
+          storageClassName: "${MINIO_STORAGE_CLASS}"
+          resources:
+            requests:
+              storage: ${MINIO_STORAGE_SIZE}
+
+

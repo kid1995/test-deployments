@@ -1,0 +1,129 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: postgresql-admin
+  annotations:
+    description: "PostgreSQL Admin utilities, like pgadmin4 and psql."
+    tags: "database,postgresql,patroni,configuration,crd"
+parameters:
+  - name: CLUSTER_NAME
+    displayName: Name of the cluster.
+    description: Name of the PostgreSQL Cluster and CRD.
+    required: true
+
+  - name: BRANCH_NAME
+    displayName: Deployment branch.
+    description: Name of the branch that deployed this cluster.
+    required: false
+
+  - name: APP_DATABASE_NAME
+    displayName: Application database name
+    description: Name of the database that will be created.
+    required: true
+
+  - name: APP_DATABASE_OWNER
+    displayName: Database owner
+    description: Owner of the Database / application user.
+    required: true
+
+  - name: ADMIN_DOCKER_IMAGE_PATH
+    displayName: Docker image of the admin pod
+    description: Path and name of the PostgreSQL Admin Docker image to run.
+    required: true
+
+  - name: ROUTE_HOST
+    displayName: Route hostname
+    description: Hostname that should be used when configuring the pgadmin route.
+    value: "pgadmin.unknown.local"
+    required: true
+
+objects:
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: "${CLUSTER_NAME}-admin"
+    labels:
+      branch: "${BRANCH_NAME}"
+      component: admin
+      application: pgadmin
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: "${CLUSTER_NAME}-admin"
+        branch: "${BRANCH_NAME}"
+        component: admin
+        application: pgadmin
+    template:
+      metadata:
+        labels:
+          name: "${CLUSTER_NAME}-admin"
+          branch: "${BRANCH_NAME}"
+          component: admin
+          application: pgadmin
+      spec:
+        containers:
+        - image: "${ADMIN_DOCKER_IMAGE_PATH}"
+          name: postgresql-admin
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          env:
+          - name: PGADMIN_SETUP_EMAIL
+            valueFrom:
+              secretKeyRef:
+                name: "pgadmin-credentials-${CLUSTER_NAME}"
+                key: username
+          - name: PGADMIN_SETUP_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "pgadmin-credentials-${CLUSTER_NAME}"
+                key: password
+          - name: APP_USER
+            value: "${APP_DATABASE_OWNER}"
+          - name: APP_PASS
+            valueFrom:
+              secretKeyRef:
+                name: "${APP_DATABASE_OWNER}.pg-${CLUSTER_NAME}.credentials"
+                key: password
+          - name: APP_HOST
+            value: "pg-${CLUSTER_NAME}"
+        restartPolicy: Always
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      component: admin
+      branch: "${BRANCH_NAME}"
+      application: pgadmin
+    annotations:
+      auto-discovery.securecodebox.io/ignore: true
+    name: "${CLUSTER_NAME}-admin"
+  spec:
+    ports:
+    - name: web
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      name: "${CLUSTER_NAME}-admin"
+    sessionAffinity: None
+    type: ClusterIP
+
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: "pgadmin-${CLUSTER_NAME}"
+    labels:
+      component: admin
+      branch: "${BRANCH_NAME}"
+      application: pgadmin
+  spec:
+    host: "${ROUTE_HOST}"
+    port:
+      targetPort: web
+    to:
+      kind: Service
+      name: "${CLUSTER_NAME}-admin"

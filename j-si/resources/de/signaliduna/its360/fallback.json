@@ -1,0 +1,17 @@
+{
+    "Change": {
+        "description.structure": {
+            "BackoutMethod": [
+                "Full"
+            ]
+        },
+        "header": {
+            "Phase": "Backout"
+        },
+        "middle": {
+            "BackOutComments": [
+                "Pipeline Fehler siehe Log Datei im Anhang"
+            ]
+        }
+    }
+}
