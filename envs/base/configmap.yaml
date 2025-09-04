@@ -7,6 +7,6 @@ data:
   LOG_LEVEL: "INFO"
   LOG_LEVEL_SI: "DEBUG"
   LOGBACK_FILE: "logback-json.xml"
-  JAVA_OPTS: "-javaagent:/splunk-otel-javaagent.jar -Dsplunk.profiler.enabled=true -Dsplunk.profiler.memory.enabled=true"
+  JAVA_OPTS: "-Dhttp.nonProxyHosts=localhost|127.0.0.1|*.local|*.svc|*.copsinop.de|*.copsi.de|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.* -Dhttps.nonProxyHosts=localhost|127.0.0.1|*.local|*.svc|*.copsinop.de|*.copsi.de|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.* -XX:MaxRAMPercentage=50 -XX:InitialRAMPercentage=25 -XX:+UseSerialGC -XX:+UseStringDeduplication -Ddebug -Dspring.profiles.active=KoP"
   POSTGRES_SHOW_SQL: "false"
   POSTGRES_SSL_MODE: "prefer"

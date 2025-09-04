@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# mongo cluster for all dev services - MONGO-DEV-CLUSTER 
+#(secret-name-used = [my-cluster-b-secrets])
+# MONGO-DATABASE 
+resources:
+  - my-cluster-b-secrets.yaml
+  - dev-b-mongouser-secret.yaml
+
+helmCharts:
+  - releaseName: percona-mongodb-si
+    repo: https://docker.system.local/repository/si-charts-dev/
+    name: percona-mongodb-si
+    version: 1.2.0
+    valuesInline:
+      image:
+        crVersion: 1.19.1                                    # Optional - (Default) Version des Operators
+        name: percona/percona-server-mongodb:6.0.19-16    # Optional - (Default) Image mit dem der MongoDB Cluster aufgebaut wird
+      replicaCount: 1                # Optional - (Default) per Default auf 3 - andere Werte im Test möglich nach setzen von unsafeFlags.replsetSize = true
+      prefix: dev-b											# Pflichtfeld - Präfix zum Deployment mehrerer MongoDB Cluster // testing with prefix dev
+      deletePvcOnDelete: true                            # Optional - (Default) für Deployments im Test konfigurierbar - löscht PVCs nach Entfernen des Clusters (Verlust aller Daten in der DB! Nur in stage nop möglich)
+      pause: false                                        # Optional - (Default) stoppt den Cluster, wenn true gesetzt wird
+      unsafeFlags:
+        replsetSize: true
+      labelName: database
+      label: mongo      
+      namespace: elpa-elpa4
+      stage: nop
+      mongouserRoles: # Darf nur in NOP verwendet werden
+        - name: readWrite
+          db: mongodb # User "mongouser" hat Rechte auf Datenbank "mongodb"      
+      secret:
+        name: my-cluster-b-secrets
+      resources:							# Optional - (Default) Ressourcen sind optional - es wird eine alte T-Shirt Size S per Default vergeben - bitte macht euch Gedanken über diese Werte!
+        limits:
+          cpu: "2000m"
+          memory: "2000Mi"
+        requests:
+          cpu: "500m"
+          memory: "1500Mi"
+        storage: 10
+      

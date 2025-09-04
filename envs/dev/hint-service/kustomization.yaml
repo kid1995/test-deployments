@@ -1,48 +1,37 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: elpa4
-namePrefix: "dev-"
 nameSuffix: "-hint"
 
 resources:
   - ../../base
+  - admin-virtualservice.yaml
+  - destination-rule.yaml
 
 components:
   - ../../base/components/postgres
   - ../components/postgres
-
-labels:
-  - pairs:
-      app: hint
-      service: hint-service
+  - ../../base/components/mongo
+  - ../components/mongo
+  - ../../base/components/kafka
+  - ../components/kafka
 
 images:
-  - name: placeholder
-    newName: docker-registry.default.svc:5000/elpa-hint-abn/hint
-    newTag: 33909f4.1440
+  - name: app-image
+    newName: dev.docker.system.local/elpa-hint-tst/hint
+    newTag: 80be53b.1463
 
 configMapGenerator:
   - name: backend-cm
     behavior: merge
     literals:
-      - SERVICE_NAME=hint
-      - POSTGRES_SCHEMA=hint
+      - SERVICE_NAME=hint-service
+      - POSTGRES_SCHEMA_NAME=hin_develop
       - AUTH_URL=https://employee.login.int.signal-iduna.org/
 
 patches:
-  - path: deployment-patch.yaml
-    target:
-      kind: Deployment
-      name: app
+  - path: virtualservice-patch.yaml
   - path: service-app-patch.yaml
-    target: 
-      kind: Service
-      name: app
-  - path: service-metrics-patch.yaml
-    target: 
-      kind: Service
-      name: metrics
+  - path: deployment-patch.yaml
 
-      
 

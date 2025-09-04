@@ -3,7 +3,13 @@ kind: Deployment
 metadata:
   name: app
 spec:
+  selector:
+    matchLabels:
+      sql: postgres
   template:
+    metadata:
+      labels:
+        sql: postgres
     spec:
       containers:
         - name: app
@@ -12,8 +18,3 @@ spec:
               value: "true"
             - name: FLYWAY_LOCATIONS
               value: "db/migration"
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgresuser-secret
-                  key: PASSWORD

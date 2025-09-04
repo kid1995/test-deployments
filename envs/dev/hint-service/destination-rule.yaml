@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: hint-dest-rule
+spec:
+  host: dev-hint
+  trafficPolicy:
+    portLevelSettings:
+      - port:
+          number: 8080
+        tls:
+          mode: DISABLE
+      - port:
+          number: 8081
+        tls:
+          mode: DISABLE

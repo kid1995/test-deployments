@@ -7,15 +7,19 @@ spec:
   revisionHistoryLimit: 0
   selector:
     matchLabels:
-      app: app  # This will be overridden by service-specific labels
+      app: app  # This will be overridden by specific sping boots app labels
   template:
     metadata:
-      labels:
-        app: app
+      annotations:
+        sidecar.istio.io/inject: "true"
+        signal-iduna.de/prometheus.scrape: 'true'
+        signal-iduna.de/prometheus.port: '8081'
+        signal-iduna.de/prometheus.path: '/metrics/prometheus'
+        traffic.sidecar.istio.io/excludeInboundPorts: '8081'      
     spec:
       containers:
         - name: app
-          image: placeholder:latest
+          image: app-image
           ports:
             - containerPort: 8080
               name: http
@@ -55,11 +59,11 @@ spec:
             - configMapRef:
                 name: backend-cm
           env:
-            - name: SERVICE_NAME
+            # K8s
+            - name: K8S_ENVIRONMENT_LABEL
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['app']
-            # K8s
+                  fieldPath: metadata.labels['environment']
             - name: K8S_NAMESPACE_NAME
               valueFrom:
                 fieldRef:
@@ -75,10 +79,6 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.uid
-            - name: K8S_ENVIRONMENT_LABEL
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['environment']
       securityContext:
         seccompProfile:
           type: RuntimeDefault

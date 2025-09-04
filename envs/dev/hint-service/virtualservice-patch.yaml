@@ -1,0 +1,15 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: virtualservice
+spec:
+  hosts:
+    - "dev-hint-elpa-elpa4.copsinop.de"
+    - "dev-hint.elpa-elpa4.svc.cluster.local"
+  http:
+    - name: dev-route
+      route:
+        - destination:
+            host: dev-hint
+            port:
+              number: 8080

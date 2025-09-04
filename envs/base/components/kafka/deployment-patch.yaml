@@ -3,15 +3,17 @@ kind: Deployment
 metadata:
   name: app
 spec:
+  selector:
+    matchLabels:
+      message: kafka
   template:
+    metadata:
+      labels:
+        message: kafka
     spec:
       containers:
         - name: app
           env:
-            - name: KAFKA_CLIENT_ID
-              value: "$(SERVICE_NAME)-$(K8S_POD_NAME)"
-            - name: KAFKA_CONSUMER_GROUP
-              value: "$(SERVICE_NAME)-$(K8S_ENVIRONMENT_LABEL)"
             - name: KAFKA_OAUTH_CLIENT_ID
               value: workload-client
             - name: KAFKA_OAUTH_CLIENT_SECRET
@@ -20,5 +22,21 @@ spec:
               value: OAUTHBEARER
             - name: KAFKA_SECURITY_PROTOCOL
               value: SASL_PLAINTEXT
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_BROKERS
+            - name: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-cm
+                  key: KAFKA_OAUTH_TOKEN_ENDPOINT_URL            
+            - name: KAFKA_CLIENT_ID
+              value: "$(SERVICE_NAME)-$(K8S_POD_NAME)"
+            - name: KAFKA_CONSUMER_GROUP  
+              value: "$(SERVICE_NAME)-$(K8S_ENVIRONMENT_LABEL)"
             - name: KAFKA_TOPIC_SUFFIX
               value: "-$(K8S_ENVIRONMENT_LABEL)"
+              
+

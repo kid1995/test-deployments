@@ -3,13 +3,13 @@ kind: Deployment
 metadata:
   name: app
   labels:
-    environment: dev
+      environment: dev
 spec:
   selector:
     matchLabels:
-      app: ppa
+      environment: dev
   template:
     metadata:
       labels:
-        app: ppa
-        service: ppa
+        environment: dev
+        

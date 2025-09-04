@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-postgres
+spec:
+  egress:
+    - ports:
+        - port: 5432
+          protocol: TCP
+      to:
+        # INT
+        - ipBlock:
+            cidr: 172.19.211.0/24
+        # ABN
+        - ipBlock:
+            cidr: 172.19.89.0/24
+  podSelector: {}
+  policyTypes:
+    - Egress

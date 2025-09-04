@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+configMapGenerator:
+- name: backend-cm
+  behavior: merge
+  literals:    
+    - MONGODB_DATABASE=mongodb # can set with "mongodb-$(K8S_ENVIRONMENT_LABEL)" set now with mongodb to avoid conflict hint-app-image
+    - MONGODB_HOSTS=dev-b-elpa-elpa4-mongodb-rs0.elpa-elpa4.svc.cluster.local
+    - MONGODB_OPTIONS=authSource=admin&replicaSet=rs0
+    - MONGODB_PORT=27017
+    - MONGODB_USER=mongouser
+
+patches:
+  - path: deployment-patch.yaml

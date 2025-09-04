@@ -5,6 +5,5 @@ configMapGenerator:
 - name: backend-cm
   behavior: merge
   literals:
-    - KAFKA_BROKERS=si-cluster-kafka-brokers.kafka-cluster-tst.svc.cluster.local:9093
-    - KAFKA_BOOTSTRAP_SERVER=bootstrap-nop.kafka.svc.cluster.local:9443
+    - KAFKA_BROKERS=bootstrap-nop.kafka.svc.cluster.local:9443    
     - KAFKA_OAUTH_TOKEN_ENDPOINT_URL=http://idp-nop.kafka.svc.cluster.local:9443/token

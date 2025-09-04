@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-employee-login
+spec:
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        # INT
+        - ipBlock:
+            cidr: 172.19.80.0/24
+        # ABN
+        - ipBlock:
+            cidr: 172.20.47.40/32
+  podSelector: {}
+  policyTypes:
+    - Egress

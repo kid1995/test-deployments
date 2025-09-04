@@ -8,64 +8,120 @@
 # Datei `public-key-nop` muss im aktuellen Verzeichnis liegen.
 #
 
-NAMESPACE=elpa4
+NAMESPACE=elpa-elpa4
+
+echo "Environments:"
+read -r ENV
 
 echo "MongoDB Backup password:"
-read BACKUP_PW
+read -r BACKUP_PW
 
 echo "MongoDB Database Admin password:"
-read DB_ADMIN_PW
+read -r DB_ADMIN_PW
 
 echo "MongoDB Cluster Admin password:"
-read CLUSTER_ADMIN_PW
+read -r CLUSTER_ADMIN_PW
 
 echo "MongoDB Cluster Monitor password:"
-read CLUSTER_MONITOR_PW
+read -r CLUSTER_MONITOR_PW
+
+# Function to base64 encode values
+encode_value() {
+    echo -n "$1" | base64 -w 0
+}
 
 #
 # my-cluster-name-secrets
 #
 
-kubectl create secret generic my-cluster-name-secrets \
-    --from-literal=MONGODB_BACKUP_USER=backup \
-    --from-literal=MONGODB_BACKUP_PASSWORD=$BACKUP_PW \
-    --from-literal=MONGODB_DATABASE_ADMIN_USER=databaseAdmin \
-    --from-literal=MONGODB_DATABASE_ADMIN_PASSWORD=$DB_ADMIN_PW \
-    --from-literal=MONGODB_CLUSTER_ADMIN_USER=clusterAdmin \
-    --from-literal=MONGODB_CLUSTER_ADMIN_PASSWORD=$CLUSTER_ADMIN_PW \
-    --from-literal=MONGODB_CLUSTER_MONITOR_USER=clusterMonitor \
-    --from-literal=MONGODB_CLUSTER_MONITOR_PASSWORD=$CLUSTER_MONITOR_PW \
-    --from-literal=MONGODB_USER_ADMIN_USER=userAdmin \
-    --from-literal=PMM_SERVER_API_KEY=apikey \
-    -n $NAMESPACE \
-    --dry-run=client \
-    -o yaml \
-    | kubeseal --format yaml --cert=public-key-nop > my-cluster-name-secrets.yaml
+# Create a temporary YAML file with base64 encoded values
+cat > "/tmp/${ENV}-elpa-elpa4-mongo-cluster-secrets.yaml" << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${ENV}-elpa-elpa4-mongo-cluster-secrets
+  namespace: ${NAMESPACE}
+  annotations:
+    sealedsecrets.bitnami.com/managed: "true"
+  labels:
+    database: mongo
+    environment: dev
+type: Opaque
+data:
+  MONGODB_BACKUP_USER: $(encode_value "backup")
+  MONGODB_BACKUP_PASSWORD: $(encode_value "$BACKUP_PW")
+  MONGODB_DATABASE_ADMIN_USER: $(encode_value "databaseAdmin")
+  MONGODB_DATABASE_ADMIN_PASSWORD: $(encode_value "$DB_ADMIN_PW")
+  MONGODB_CLUSTER_ADMIN_USER: $(encode_value "clusterAdmin")
+  MONGODB_CLUSTER_ADMIN_PASSWORD: $(encode_value "$CLUSTER_ADMIN_PW")
+  MONGODB_CLUSTER_MONITOR_USER: $(encode_value "clusterMonitor")
+  MONGODB_CLUSTER_MONITOR_PASSWORD: $(encode_value "$CLUSTER_MONITOR_PW")
+  MONGODB_USER_ADMIN_USER: $(encode_value "userAdmin")  
+  PMM_SERVER_API_KEY: $(encode_value "apikey")  
+EOF
+
+# Seal the secret
+kubeseal --format yaml --cert=public-key-nop < "/tmp/${ENV}-elpa-elpa4-mongo-cluster-secrets.yaml" > "${ENV}-elpa-elpa4-mongo-cluster-secrets.yaml"
+
+# Clean up temporary file
+rm "/tmp/${ENV}-elpa-elpa4-mongo-cluster-secrets.yaml"
 
 #
 # mongouser-secret
 #
 
 echo "MongoDB mongouser password:"
-read MONGOUSER_PW
+read -r MONGOUSER_PW
 
-kubectl create secret generic db1-mongouser-secret \
-    --from-literal=PASSWORD=$MONGOUSER_PW \
-    -n $NAMESPACE \
-    --dry-run=client \
-    -o yaml \
-    | kubeseal --format yaml --cert=public-key-nop > mongouser-secret.yaml
+# Create a temporary YAML file with base64 encoded values
+cat > "/tmp/${ENV}-mongouser-secret.yaml" << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${ENV}-mongouser-secret
+  namespace: ${NAMESPACE}
+  annotations:
+    sealedsecrets.bitnami.com/managed: "true"
+  labels:
+    database: mongo
+    environment: dev
+type: Opaque
+data:
+  PASSWORD: $(encode_value "$MONGOUSER_PW")
+EOF
+
+# Seal the secret
+kubeseal --format yaml --cert=public-key-nop < "/tmp/${ENV}-mongouser-secret.yaml" > "${ENV}-mongouser-secret.yaml"
+
+# Clean up temporary file
+rm "/tmp/${ENV}-mongouser-secret.yaml"
 
 #
 # postgresuser-secrets
 #
 
 echo "PostgreSQL user password:"
-read POSTGRESUSER_PW
+read -r POSTGRESUSER_PW
 
-kubectl create secret generic postgresuser-secret \
-    --from-literal=PASSWORD=$POSTGRESUSER_PW \
-    -n $NAMESPACE \
-    --dry-run=client \
-    -o yaml \
-    | kubeseal --format yaml --cert=public-key-nop > postgresuser-secret.yaml
+# Create a temporary YAML file with base64 encoded values
+cat > "/tmp/${ENV}-postgresuser-secret.yaml" << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${ENV}-postgresuser-secret
+  namespace: ${NAMESPACE}
+  annotations:
+    sealedsecrets.bitnami.com/managed: "true"
+type: Opaque
+data:
+  PASSWORD: $(encode_value "$POSTGRESUSER_PW")
+EOF
+
+# Seal the secret
+kubeseal --format yaml --cert=public-key-nop < "/tmp/${ENV}-postgresuser-secret.yaml" > "${ENV}-postgresuser-secret.yaml"
+
+# Clean up temporary file
+rm "/tmp/${ENV}-postgresuser-secret.yaml"
+
+echo "Sealed secrets generated successfully!"
+

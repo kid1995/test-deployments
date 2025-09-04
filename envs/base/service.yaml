@@ -4,28 +4,13 @@ metadata:
   name: service  
 spec:
   selector:
-    app: service
+    app: app
   ports:
-    - name: http
+    - name: http-app
       port: 8080
       targetPort: 8080
       appProtocol: http
----
-apiVersion: v1
-kind: Service
-metadata:
-  name:  metrics
-  labels:    
-    name: metrics
-  annotations:
-    prometheus.io/scrape: 'true'
-    prometheus.io/path: /metrics/prometheus
-    prometheus.io/port: '8081'
-spec:
-  selector:
-    app: metrics
-  ports:
-    - name: http
+    - name: http-admin
       port: 8081
-      protocol: TCP
       targetPort: 8081
+      appProtocol: http

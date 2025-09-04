@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: app
   labels:
-    environment: dev
+      app: hint
 spec:
   selector:
     matchLabels:
@@ -12,4 +12,13 @@ spec:
     metadata:
       labels:
         app: hint
-        service: hint
+    spec:
+      containers:
+        - name: app
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "200Mi"
+            limits:
+              cpu: "4000m"
+              memory: "500Mi"      

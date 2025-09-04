@@ -2,67 +2,46 @@ apiVersion: v1
 data:
   AUTH_URL: https://employee.login.int.signal-iduna.org/
   ENABLE_JSON_LOGGING: "true"
-  JAVA_OPTS: -javaagent:/splunk-otel-javaagent.jar -Dsplunk.profiler.enabled=true
-    -Dsplunk.profiler.memory.enabled=true
-  KAFKA_BOOTSTRAP_SERVER: bootstrap-nop.kafka.svc.cluster.local:9443
-  KAFKA_BROKERS: si-cluster-kafka-brokers.kafka-cluster-tst.svc.cluster.local:9093
+  JAVA_OPTS: -Dhttp.nonProxyHosts=localhost|127.0.0.1|*.local|*.svc|*.copsinop.de|*.copsi.de|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*
+    -Dhttps.nonProxyHosts=localhost|127.0.0.1|*.local|*.svc|*.copsinop.de|*.copsi.de|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*
+    -XX:MaxRAMPercentage=50 -XX:InitialRAMPercentage=25 -XX:+UseSerialGC -XX:+UseStringDeduplication
+    -Ddebug -Dspring.profiles.active=KoP
+  KAFKA_BROKERS: bootstrap-nop.kafka.svc.cluster.local:9443
   KAFKA_OAUTH_TOKEN_ENDPOINT_URL: http://idp-nop.kafka.svc.cluster.local:9443/token
   LOG_LEVEL: INFO
   LOG_LEVEL_SI: DEBUG
   LOGBACK_FILE: logback-json.xml
-  POSTGRES_DB_NAME: elpapgt
-  POSTGRES_HOST: vipsiae11a.system.local
-  POSTGRES_SCHEMA: hint
+  MONGODB_DATABASE: mongodb
+  MONGODB_HOSTS: dev-b-elpa-elpa4-mongodb-rs0.elpa-elpa4.svc.cluster.local
+  MONGODB_OPTIONS: authSource=admin&replicaSet=rs0
+  MONGODB_PORT: "27017"
+  MONGODB_USER: mongouser
+  POSTGRES_SCHEMA_NAME: hin_develop
   POSTGRES_SHOW_SQL: "false"
   POSTGRES_SSL_MODE: prefer
-  POSTGRES_USER: ZA-SVC-ELPAG-T
-  SERVICE_NAME: hint
+  POSTGRES_URL: jdbc:postgresql://vipsiae11t.system-a.local:5432/elpapgt
+  POSTGRES_USER: ZA-SVC-ELPAPG-T
+  SERVICE_NAME: hint-service
 kind: ConfigMap
 metadata:
-  labels:
-    app: hint
-    service: hint-service
   name: dev-backend-cm-hint
-  namespace: elpa4
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  annotations:
-    prometheus.io/path: /metrics/prometheus
-    prometheus.io/port: "8081"
-    prometheus.io/scrape: "true"
-  labels:
-    app: hint
-    name: metrics
-    service: hint-service
-  name: dev-metrics-hint
-  namespace: elpa4
-spec:
-  ports:
-  - name: http
-    port: 8081
-    protocol: TCP
-    targetPort: 8081
-  selector:
-    app: hint-metrics
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: hint
-    service: hint-service
   name: dev-service-hint
-  namespace: elpa4
 spec:
   ports:
   - appProtocol: http
-    name: http
+    name: http-app
     port: 8080
     targetPort: 8080
+  - appProtocol: http
+    name: http-admin
+    port: 8081
+    targetPort: 8081
   selector:
-    app: service
+    app: hint
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -70,40 +49,34 @@ metadata:
   labels:
     app: hint
     environment: dev
-    service: hint-service
   name: dev-app-hint
-  namespace: elpa4
 spec:
   replicas: 1
   revisionHistoryLimit: 0
   selector:
     matchLabels:
       app: hint
+      database: mongo
+      environment: dev
+      message: kafka
+      sql: postgres
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+        signal-iduna.de/prometheus.path: /metrics/prometheus
+        signal-iduna.de/prometheus.port: "8081"
+        signal-iduna.de/prometheus.scrape: "true"
+        traffic.sidecar.istio.io/excludeInboundPorts: "8081"
       labels:
         app: hint
-        service: hint
+        database: mongo
+        environment: dev
+        message: kafka
+        sql: postgres
     spec:
       containers:
       - env:
-        - name: POSTGRES_SCHEMA
-          valueFrom:
-            fieldRef:
-              fieldPath: K8S_ENVIRONMENT_LABEL
-        - name: FLYWAY_ENABLED
-          value: "true"
-        - name: FLYWAY_LOCATIONS
-          value: db/migration
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: PASSWORD
-              name: postgresuser-secret
-        - name: KAFKA_CLIENT_ID
-          value: $(SERVICE_NAME)-$(K8S_POD_NAME)
-        - name: KAFKA_CONSUMER_GROUP
-          value: $(SERVICE_NAME)-$(K8S_ENVIRONMENT_LABEL)
         - name: KAFKA_OAUTH_CLIENT_ID
           value: workload-client
         - name: KAFKA_OAUTH_CLIENT_SECRET
@@ -112,12 +85,65 @@ spec:
           value: OAUTHBEARER
         - name: KAFKA_SECURITY_PROTOCOL
           value: SASL_PLAINTEXT
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              key: KAFKA_BROKERS
+              name: dev-backend-cm-hint
+        - name: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+          valueFrom:
+            configMapKeyRef:
+              key: KAFKA_OAUTH_TOKEN_ENDPOINT_URL
+              name: dev-backend-cm-hint
+        - name: KAFKA_CLIENT_ID
+          value: $(SERVICE_NAME)-$(K8S_POD_NAME)
+        - name: KAFKA_CONSUMER_GROUP
+          value: $(SERVICE_NAME)-$(K8S_ENVIRONMENT_LABEL)
         - name: KAFKA_TOPIC_SUFFIX
           value: -$(K8S_ENVIRONMENT_LABEL)
-        - name: SERVICE_NAME
+        - name: MONGODB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: PASSWORD
+              name: dev-b-mongouser-secret
+        - name: MONGODB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              key: MONGODB_DATABASE
+              name: dev-backend-cm-hint
+        - name: MONGODB_HOSTS
+          valueFrom:
+            configMapKeyRef:
+              key: MONGODB_HOSTS
+              name: dev-backend-cm-hint
+        - name: MONGODB_OPTIONS
+          valueFrom:
+            configMapKeyRef:
+              key: MONGODB_OPTIONS
+              name: dev-backend-cm-hint
+        - name: MONGODB_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: MONGODB_PORT
+              name: dev-backend-cm-hint
+        - name: MONGODB_USER
+          valueFrom:
+            configMapKeyRef:
+              key: MONGODB_USER
+              name: dev-backend-cm-hint
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: PASSWORD
+              name: dev-postgresuser-secret
+        - name: FLYWAY_ENABLED
+          value: "true"
+        - name: FLYWAY_LOCATIONS
+          value: db/migration
+        - name: K8S_ENVIRONMENT_LABEL
           valueFrom:
             fieldRef:
-              fieldPath: metadata.labels['app']
+              fieldPath: metadata.labels['environment']
         - name: K8S_NAMESPACE_NAME
           valueFrom:
             fieldRef:
@@ -133,14 +159,10 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.uid
-        - name: K8S_ENVIRONMENT_LABEL
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.labels['environment']
         envFrom:
         - configMapRef:
             name: dev-backend-cm-hint
-        image: docker-registry.default.svc:5000/elpa-hint-abn/hint:33909f4.1440
+        image: dev.docker.system.local/elpa-hint-tst/hint:80be53b.1463
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -165,11 +187,11 @@ spec:
           timeoutSeconds: 2
         resources:
           limits:
-            cpu: 200m
-            memory: 256Mi
+            cpu: 4000m
+            memory: 500Mi
           requests:
             cpu: 100m
-            memory: 128Mi
+            memory: 200Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -182,3 +204,522 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: identity
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: dev-b-mongouser-secret
+  namespace: elpa-elpa4
+spec:
+  encryptedData:
+    PASSWORD: AgBpTxNG/lhHRocsQ127WJqKDL1dxLju6A7/clorN8X4esSX5/puwSom6wwA8aKLQ+BDmD4vibwp34yo1U+Hg8qUXuHgUgPAD3B4MiGBvFYAE7H3ZBBDeLHCQvanFveCH7N70PeUNkHF0mCntyU03SMiHLnmo47xhD2joRB7IhfICBIzpPe2MKWUQTUUgL73eH67WXKXpnH6bm/dMwLIGrWUFwLAm2u2Ia/UT2Xj2pq5CP70AI3UN1eLHnklROz0niWGSeeV7vTyzgDnpQF7g+euvtioNf9wd/oFH2ZaaS7Pahy56d5znC0lWurvdOuMnGk6lKHNsAb9ErGMukGyR3AtbDQiTbvPdfp2zRnuawEAaXQKneZgewTJXAmr1onxTtIWPJD4DNdRvoqtNZMC8Ksm1WhLW+38qVSO+cdiHkupCzfSJuhgTOa+V5X4sBTIoztPkgUx94FzJVhHRUX4gAfzjtZVwkZB9Qd2CMU/g314JTNxjbUUKT3xqVf3sUG6qmyrIPVKudLzQOMXBD/Gq6Tje0e2lmbcG0DEuj3LYVNQy+BUMqQUt7jIZoZGT7SlEvLht19R+aDUWQ9DPu1YWI+3pX/Qx/7KoqLi9BtoW3Ddk8WAHdEjJFGTugPlUWllO0jxuuz1X4D8UCY0qn1Pgr1sXb8CODelWin5vav2YAwV2h0ZRtd8KA1roWZPIR17uioA50N4Vkot+4nTJCTNvOTs2g==
+  template:
+    metadata:
+      creationTimestamp: null
+      name: dev-b-mongouser-secret
+      namespace: elpa-elpa4
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    sealedsecrets.bitnami.com/cluster-wide: "true"
+  creationTimestamp: null
+  name: dev-b-olly-secret
+  namespace: elpa-elpa4
+spec:
+  encryptedData:
+    PASSWORD: AgCSONjw0/XY5OZQQ4Awg4JAP8qkLbaXGzg49mfjK/AzqjutjLDF3tYHZLTQmRtctFURWygq7F4+HzmbLMNfytYs+e9Zq1luC/kQyNDsY2FS+WRQDQyaCT/U/Gitp1rVweTySLf46j8RMJNIwHlC1QySPps+Idjs6W90qBRqP38ph2VAm+coH+Jk1i9VTA+aAMfuhXG5R0+IoIpRGE/T9J+iinY81vxAN+XJ1zZDRyrc0czDZUmM+dqfQmS3ifJk/yPKhthonbEaQZS7C+nV7XMMgW9Jcd+HL6WlGWghqU2nfj3HwVlSrkld4F5ODM78vOZZaO23U8ir6pMdjZp9mkF69N2r/uJAazc7F1uHXVh9wvZGiIDMJuf2SiAEZk23PnhjhELfB0IjonVzzSkLxpdoaXQhy2WwGzqoqpzs/s0lOb3MKs8K3jtOPGGefLlGtpTygFYl3liy5q742hT19tR0Behdw2m0QSrocTJ/yXmFXUcm3HfyJycM/Xantvjm0Mf7QMFp3GoVPqS5BKJigQeAdT4QwUGKwjq7HUozqEjBJXQK1kE4w88b1153VImnvGwqyDOWDuFeP6nXB2oK236CCkgFjS+qqCHUqH4LkHbS6D5W7Gqw9kuRRSLv8HTjOzmrIWtpjPEMJIQTkRWaTNc2Ye3rOZn2sBI6t8+PtwnCpXv5gAPu6w6AyBDRMHLoMX7YBT6n6cqEL09lpWD5F2y9ZlDuHA==
+  template:
+    metadata:
+      annotations:
+        sealedsecrets.bitnami.com/cluster-wide: "true"
+      creationTimestamp: null
+      name: olly-secret
+      namespace: elpa-elpa4
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: dev-postgresuser-secret
+  namespace: elpa-elpa4
+spec:
+  encryptedData:
+    PASSWORD: AgB0KIQegtfAXJS19/IjRZW2K4kPdNz+MJZMNofCujW+MeqDnyp+VAIYv7xcuMQdlBXytbvqN84VXVKxx4CPi+8ejv7IybNzLHAPmWA2vV8ElbjAhJWTsbCpsDtnvlhUEr4uU5iIkB/uPg9XeFUL20LxPb6EMJgjhKHOGZr/AORAha0GTX7hp2vTTac7wyYlcWcbjwzFSH7RtEyIfo2OabeFxl8IepA91gtunyj5JXg+VMlmJxqRjFhR4EjXGIqBSzB+3hCyHry7h2Qif+vV+NmJi1OpqKq5GcQ4uKcMOSmdkaZJ+Ksbr/FJxR8AA9V4A9r7DHKTb8zSSdevh/CDn1jP56Y6Qit96JHXuC/FaiPzlhSF4l/Uh4PnK9T4Wcq5G7nZlKhzfbj6sNLpgiEbukyIra6O5/GTlf0YF45kk8k8PwFShi81HWNqD3Bjy8HorNZiifOAZONU7HsUlM61j3tG9k16tI26QJBu2OyC9v7VFJmgKFrPE1HtjAUGBHrNIqHldWa1APb1TFhBkNtCBC+LuCozof5T6S2JATJTb+DOBulll0FUvhEK+ChxpTUu4vFLJ4jn+NjwguGAqOeyvOgMw/3BRXzg1jde7vlMdwdMPFzmUYYKOok/tYfdJFkgkB4+/vtX3kwUKYUU4dFiGk1tOCoKiX98j4xUMdgTNpi7mM5jtIhzQwH/7H39nrA1xk5l+kKyNvnQ1SXkflHo7jI=
+  template:
+    metadata:
+      annotations:
+        sealedsecrets.bitnami.com/managed: "true"
+      creationTimestamp: null
+      name: dev-postgresuser-secret
+      namespace: elpa-elpa4
+    type: Opaque
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: my-cluster-b-secrets
+  namespace: elpa-elpa4
+spec:
+  encryptedData:
+    MONGODB_BACKUP_PASSWORD: AgAhO08Nfl9LU1bcRK5b8q0EEmWtAG6rKVfkll5tQLCZdB5RXglX0/Cz1IhzZGBHqujnp2DSaGRPl3TUm4cFWwSnGgOekKAsoatntKBdcKbIHw7mJ6MNcqt4gzPslk8HEBciBWINiXYv8XNkkqfJe8bnAKZoq1un1Xty00y9BnUkfXm/tsrE/IW7dB44xWsTl96k4UJ3bB0HWsGOqdVcD6z6jpEh0g2/NuoCbf8gvl0qFzJjS2WgknUQrwr3fZA+dN4F2evdIqy+wkX4Wejt2Li2cp4Y3rfu4XM76xoddCGnFOo8spV7g2ua0hIqeANz/coZjrHAkWiafQDABjGs5ePN1G7IYrIckL4bkgw9czvDfIl6GVH4Id9OFLJdZBSo+IvUfxGJORRLVysibgkaJYZ5BmiOn095VNeVNSxVlOIqzZ//WDdVHQHmMw0sIESkriRMtl5RNmOdMikERtWeM04Cn/R5L1zgOq8fpzdZszku+LGhyDRvLU3leQFI7acjYqccmwPve9Yy/T1c22kY2Z5lhlbUiRiKaajMYhPORffAbN+Q18qYkKfcK8ClkEwLuE3ngbq/3MqSG2izJZc3CqmgwEXa+3nzJWmgUTSObseeM5AWmCFLxMriTZqoWdL0LYyyA6UaIFHOY405+7wrzT2jazwjRdPz9Q2DXlMzZX4YT+bCHq1+rU9SFOBlaNbFtF+w22dU2tCJ46Arw1lJqg==
+    MONGODB_BACKUP_USER: AgAlqoXI70yfXWKCs5T+r4YXZ87zcuyiT1Wlt4vRff0OjHJ6LZWfhmbiNwGC+mIxVecFeI4c5bD09JGFCraCX3fY+CB79Y8+lgjfNOdN3RKZ1e0r4tlGp8dGX5wP4207tNN9oGcIgIpKeQuCSVIX9vTD33dziT32/AYvYK0EDR8OoENSIOI01PXOlkOSEEYOrMoGR4RyvbjJNX6md/bi2Km2ORPQxpMswbBB8FCcbO5NQIyQX0MLVYirNII+o22a9TuLiHl3BHscHaSwpI7Va5jWOCh6bVVMqnXFLGWtQzLjWP5JehIVZHL5rhuRFLiLtgJ+smafY/04bAOlhQPcP9fFmVygnM1iOVnhfM9h4Po+FQoDfXH4I4vNUC0E5fbWGYWKkP00EvHKyxfT4ckkobo1isJTqaMYiWY1069j81qTyI3YTz4c5mvM7otszTOQywnnEnNcdXnzdGR/9XpJrbw8/y+cBjIe0CzpjuK/HaD2BWSbGx4doShDPO02uZ1xYCNalTj6qBRmmyM63puoXwtIQfCXir4Wwvm+L2eBYQo49GyTu1cUSDS7e75NIvVWyRUvZSJLWtrGcdcVrfhcbZTUWbkYxVEVuMKQHRNXmA6LY4cUvrhJx37cNdA93e40dTetFtNDaQLNl7q1MxdVZ63ZEzrEhAz9LBrVjMKScacgqBGiJErtQlpQfgMoTbvvH+bsJnJxiK4=
+    MONGODB_CLUSTER_ADMIN_PASSWORD: AgCYygezaje+ga7+QBIXD43IN9wlODAm4/gkVJcCQWBj0k91YT+/3EfoG7iDYOmig9Y9fOfGG+uRSqukrqOVGrMLcfP0URCepTsxble4kJ4LP8/0EriR+w3OemZBcsCrmilIu5LK5px1wyRy3V1qM4ywjblb3j/hza5X7jkpFK7dFrE2F7VUhdEDP8nFAquBaGSbLuuMUiXrlzateSKGP1u+xjEd+SFdKCmvrMPO1EivxgMJ3L2Pq9mnz3nq1IvOOPC6n/sj6QvDxQlijxCxUcZ06D41cbXA6qSaNZWkYnrZCG/X19OBMBqft5vYcL+gjx1Bawd3kC6AAD5QJL/YKxtOUs7qGT+Rj3JDBCVDk2OfP9xYBTHZTVGEwPTT2HUeyGvQw5Dpa7R7HARgtdMTvaYkSpqcAJYi9xpbQ9fOvQXOsYfpWMta2+brMSYD+3102lKhyXSefqJoOrOKyeOPmhi2hyFX47J045SkRX6WSA1e+tQfGMsfa9AsFSNQU5+hScdoFl8lsTM9ZFQWz0uhJAhcXXhT+lUw0Nze6E93wRWIMOIU8InL9g7U6ZeKc/rW9SjSpUb6wtaia7gCgaFZemHnWIcMGgrWfoDNI62L3pB6dVBSjM5pxzume0JjD1wi7sjHzzx7m5ZQeR6TXh2hs0qK2SkPOMrj4ERMDmaTuqG5xL8ixo6SFKDfFhRw+Bm7sHbmEBkXJNTXhSdNUCmanxklySfj4A==
+    MONGODB_CLUSTER_ADMIN_USER: AgCCP3nAiIWnPJfrY06lcAoMpzD+efl16Cvkx5SbPYeNoIktODVSfb7eOjUqVTi64qAuvsFZpuCdVXbJ1i9W+cZhrPmEwgf/cxQfjZvkJKqUBZUEPvvDXTdgL1O+rwvakIHx0fcnRFk/srf1keiqSWa4IewX4EK9pZrbl22o2p9wqnCMQxrFXk6VrI+l4sc6jUWq2Un29cWQPudCYjWApqCVbe6sLjYuCPVZnjNyxl7fbj8N2bnTrNE4mBuEDz9ccvlyCaUliunAd+3P7RZVTrIdyL/JyHVOAhU1IBoYqsYQ4PSnedBF+mKJMyhpHBh7c6Wmz3OPD+wWLV+0qDi0uj4c0hWSL0ej+jpYv8DyH7qhUFKBdGtJcaz7aLTUjcpnBNFP3+Z/5iuz+/Ye7Aq2I4V01b76qEyzlLJxryQQMmpTYCItXbdD9acc5gp/QbIM56SjmnZepN7IhQN4N0J2KeOrqoaisGiyKGJTiUtPaisXm2QH1MupSzLckkTwmQpQ4UKXdtqWQhXtZIjySaABXt71hdrNFympLhbpoRp14+ZXxJ2MHRPfZG1iZKEZEnLy17wZT+OJdyD/Ypo1+Y7r+TekXH1Ff5xyT3+wEoCel6ozK6bB2AnWwF7ieRmz+HslRn13EEskG/wJNYw5VScF3K7m/SCLQ7pWvf4hYBN4IhN1BBDXGw8StiNBf/fAEqeikAmZ8Bgi6Is6hu1WFGc=
+    MONGODB_CLUSTER_MONITOR_PASSWORD: AgBfhxLXhUy7B4izoXRYhelMz0bE4OTzlZTQYLFF+ZI27p0P3LD63tGiPbCYS59q8j5Qi2GIwvy0gtuxPRGKjzNJwZrLWfunuM8gxb/Tejt4JSKYXhvdJYEjrSsZds6BWIxAXeJ0yheSWTKTeJE0aqZR23LJ+qZMohSikPA+OMKtkyciE0Ws6PtJ08hKfk++CoYTZ8fNF7vE8AjwZTL9qsEfAcTiFf5HtlGMwp0ddtyj+dbjbBT3d9573Vd2GwMY0LHbhvHopVypA5OyNDZVrNZeLm9UCPiufaUSBRxIOcjVEg6zR/zrCYzgtzAzV347LtdY0Y+xL+zkYpkfm9QnS/8EQd63EIBb0qtJj5nU8M4n07dlVnoo+/afYwJC+aGmB1U4hGBKOn8gO3qC9P8YatBLPB71TplZv2k2to+kkH5z0L0UrMG8F2XtrCuTlcPab0IeFpzKj7K6N8pmb8CbvrTlu9PYUIxO+kp4k8/LOOo7M1nt4vdRNVECVJnb3JelbjzXcLKnH0PY1zCnCIstVFiKjmhOVv5jDbovSRmaABDMt8oOW4VnXvfuXpUnV8KWrdGaFFZm6cdHGunmCfdH7db9skmCfeuxlUOUODpSHsaEboCM9D4V9zNd6yWd2EydpomXPfSNNSjRVPyw3EnJtPDA71NwHo+zh10rjFi+CwqTjoK3RmHjCC05CpEEPwHrtoCw4dfyT/DW7s/iVwj1w2tRnIugnc7Q
+    MONGODB_CLUSTER_MONITOR_USER: AgAM14EGFzWZr7rRu8Zp2f5Lkavtt1SbIiUrq1QEeYqylgl33Zaavh7bqbvNVnRvABrlSs/iDVQQxTkYDg/iX57Lw6svRLKnc/WnQWsH1JCermUyYcyONldfJwyDOwMtaaA4aAVbzJdsiyizjw4E+/ck6i4nTq8Lga3c2S+RYK9MN2AGv6o99+7sJNqKbnVdiyDYjszmrjxS/WnyrYTa/kwmH/lHkkkzgQ4LtAfV2sykO/1JLNjoulnRNvrU04L0PI1DrfiuuYMa5f1AvwUKtPLSpHbdOwuK40ffmzUntKwsZvngeZzmKcvSOF//agSF+MR9BSNfqM+25isxhhdnbjGDzvWGn1gv62/RLL+CnYk5ZSkRU9kVBzeCdSMMsLvlaVq2CnAjEMZmsghfhdvv4LANeTQpWzmMzZCMn18VyasMWtJZ9+Y4mpkIgACKQUVFnRS+3h7hupNr3vsv8/IagGoWOHZu1Cr+Xb9QBQwN6N10FCiL1zdvLvsdmof5I2XfZCfwkLBeyWtvbkHU05RyTA7p4M/lpEIhKfLZS3dKPDjwWEMv+SLyQysPwjh3mDWmy3O6WI0eLBijBDs7AUycn5VEicymrs5JCHN5RCop23v2Ja3wHQCryWe1R3S5IO07WKBlKiKtYWe+v4lJvEFFColZRS65TnLh27v/2OYHZvUpCFwZUvRkPIvFQeWQ/g3ws97lT7Ibrj6ZVSRV2yOvUg==
+    MONGODB_DATABASE_ADMIN_PASSWORD: AgA2nyUrVow8HYsxMe5Z7thhLxToEf71w/Wpf/o8zUe1HXCLnWUKC5j6qBM3sZlqzWvxsA+cpTwQi4ii9vo5hMVcWqruOlKzb+Ivlk/TKvyAPAbD/PlFk5dXzHZBOXKSE7k64X50dqOuAmkn4nwH7d+glz0d+NJaowYXhTwU43sOjJcPzUH1KIgAF7M1jIILrYfMXZ+JhVy8fbjGAuhL1WhXwy7eBMyOv8KQuJUgty/H3IcjRo22urzBV3z7RrZfrzH0AE5Cb+Ze923Q8RCQ2uJyfov6Vjxy6MflIYf7nEKqD0AKwk4aXxDSYNGOgAm+bcGFiKiygdDVCWSU02b6RRGAjRUz4YypcgtM5wQlMgPOUwGqnHdrnj9/1FXgdFMY3kz6Gx/e8Se616HKZ2LgLSjMSRhI4jeQbq/UXYYyH6lNuBHaMxmmtqKv3n591ACL31bih/Tp6tlYFhf76zkfpc1mvX1QXVpTLgPBbwLDd3A8XumSkMBSDroA0nx0yMPaID5vVJ0rrsI4+M4+baQY/l4mdWb5d3aMjTYTQJTO/mV94s0r77rmugpkCkXlUStVYTWhsC/h/WDykTiS90LK5DwSlOZCw4evUeDUXLWw0RCABYrRlyYkWgEl10rGDtLVzTjcSHO6a/aeXP04v38PLpJKCuiaiItkrogSM/zVgFOdd9LTnNk+Cvvhsn8uuJV5NcJ9ie1u5GzzsadAcbWS4u6sijzexM0=
+    MONGODB_DATABASE_ADMIN_USER: AgB9suD392EPLPuvKWA4rAp9WG25Ttf51g7Vizse7ysdx67V5XNxdltib/hGAxhAZxxsUGMIDQoYL6l4fvotLCB228KwPs1mxdD7LSiHs/40YGwN8jeKcIJNqE7+v3+aF718FkGCtzw2YaVuIPc1zcGY7niiBRf09Tv8lWmX+1m5T8IV0Q0v6YLkB6YwJczP+RMxptY7+X42DWTdwAO+THZo30jKZDygK+ZJWSnBOS4lN1uSTkfLSZrinhfzC8JoO1gHrEv+1CE7IbAzYrpTJStavAdYyvKUg3dICeqcHF0FVg4hlBHhe38xt19UcKIrwIfXjfkTGvZvuOxEXR6HAMPRD8OLUq1aDDmdVlzRHpg1+VNkRgXAEKFdSWQYfa3uOJeHCCWg93QnnLCdSRSxNQi/zkP7zw26DC1jcFKzW2GwYv7loSebYBRxjw1fHDxMgDDB0JSaDf9FWvwRzvrQR/tf4PTiY5P5ribG2QY116JHm/k5rLFJJQ4/7WTJoFwQiyYE9PGchaQ3zG0SAiu19j/5ylnwLV/dL7Dnbx1oxn5ZrmWlIU2wFkyZ5nXI+0h/AhLD8dTAU8RdRhfnWLN854eG0cAg1+hkG+u5jzi44U4ri2bySko6YMxohVlPwnLbuubFmWro48EbCNxLDdUx745I7QLdtZ3E6nUQbOmobK0Wpp7nwUKFB6+BIm78ilaYwExDdhvOceOiWdF/YaRw
+    MONGODB_USER_ADMIN_USER: AgBok/QGYdcRRv53GGAsYveRMfSlE9JjLlyf2jdL683GVoSNuWanxtAEs5UxayWSrAxL+nmr8ojFJwio3r4+5kFWIKWKHFy5VetDundWE4eMSBqPLRxZBO8HzExUfg+nnz93XW6zcVOfCEhMeZMWbppoMAF1qaNB3ewszQNJKTtBoq3qDAIvUCOjS0Q0Qgu3nQ2Qdst7vUgh0Yo6bzix6ij9dKwYaUtC+L2Ma/bOd1HGgGNYK98cXRovaAVud1DOCBVsDwNCFYJF68KfvNJEJ8wXMRAnK/MnxJBlLdUdtFMlDqPK3GVPmbzZRgzdyLs593izplAFC4cLD4LyP8oyPjwFF/7f1aeARLaIbJhk3FJtG0VEOlpzqZb1Ojst7XBCxaaeB6bJk/OKac+XX7vXwgXeOFWe06gOk2qVYq/108537304qIUlltF6lK4drSIZLPocPvsBKT0V1IcROom8PMlAhRvDFKSsYo8JowlVWmfRMW4M7wggjDuEbdmtn8RjXC/752ql/1Ks9zuMCBZ1X6AEv/raZqug8ZIDfW1uPdUxswZeEmBmPjXji8BWuRkTY/JmuQX5cB4auwuwrbD75nHaaNyiYcCxzOT/YslviQdTKan7rhbRnAV+CUGnAWeov2NJ0vqPxL3wPy4javKXoOp6V+dCFGZcVN4q41+0oUp90pBoADtFOUJML0nGGSuTIyXZ/eR0vnpyHGs=
+    PMM_SERVER_API_KEY: AgCAXcrZj4dOHG4VNt7w9ZW+9c6DrSBssr+LZ+LR6aVk9HTqk83a2xb/71yw+mhW+E+wcYECLl9lxPlaCrKLBcIAZWCjU3JgWmdbZyZKzZ8ftB3Xb64Mz4aMeDMEjKbonNexz4oTu8hMu8nv5vmdtB4bXrKeVOiwZVZDvKeaodw3JiELNC/x0FumEXYl9NsaEjp6i5PGTGAIWnXQ+1tszg8Kc7sujF52NXywci3Y9GuIAFfYTiq/WHsgF3Y1xX9yWjtDsLXvq03KywdyOa65kh0kozzL5NAiYWTdVyhhtS4Hp72FqKSIBdVhmrheRs/NBQPRIbzDnhagT6XAHhGMmsQb8MBpnqJO72ldxb6idjhHIeUUMaaJ8LHW3VKo8ocqEQBKMTMxowMAmUibsR6DXig9aMwBBIAhQNVdV5Yn9/6sKgORpEWNpdwJs1HTYFYIOd9bEdl4kN8J9HV+oSzFgi/oySfD8GNq4phIns1MHISz73lc2usEvquu/pjK+1kZo3J8y/cI8yl7J5S4T01TxyqYOw0LCE4Byivdp3oDYHb86vMVKhqfVRGU+kdGei95gUzxiMs8VUO1zHVAGwSYkuWni7ra6AGPuqo8KFB/sjjQXVWRVR0W0pVKszpcl1ZkdbkXtODF3al56dWZNXTUHToS99rcuAUwiIH4UV0fA6XHlM0uy0sBWtzo2byvA7o5L0g+axnvjvQ=
+  template:
+    metadata:
+      creationTimestamp: null
+      name: my-cluster-b-secrets
+      namespace: elpa-elpa4
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: dev-hint-dest-rule-hint
+spec:
+  host: dev-hint
+  trafficPolicy:
+    portLevelSettings:
+    - port:
+        number: 8080
+      tls:
+        mode: DISABLE
+    - port:
+        number: 8081
+      tls:
+        mode: DISABLE
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dev-hint-admin-hint
+spec:
+  gateways:
+  - istio-system/mesh-gateway
+  - mesh
+  hosts:
+  - dev-hint-admin-elpa-elpa4.copsinop.de
+  - dev-hint-admin.elpa-elpa4.svc.cluster.local
+  http:
+  - route:
+    - destination:
+        host: dev-hint
+        port:
+          number: 8081
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dev-virtualservice-hint
+spec:
+  gateways:
+  - istio-system/mesh-gateway
+  - mesh
+  hosts:
+  - dev-hint-elpa-elpa4.copsinop.de
+  - dev-hint.elpa-elpa4.svc.cluster.local
+  http:
+  - name: dev-route
+    route:
+    - destination:
+        host: dev-hint
+        port:
+          number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apm-egress
+spec:
+  egress:
+  - ports:
+    - port: 4317
+      protocol: TCP
+    - port: 4318
+      protocol: TCP
+    to:
+    - ipBlock:
+        cidr: 172.16.0.0/12
+  - ports:
+    - port: 5353
+      protocol: UDP
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress-gateway
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - istio-system
+      podSelector:
+        matchLabels:
+          environment: dev
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - istio-system
+      podSelector:
+        matchLabels:
+          environment: dev
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-namespace-gateway
+spec:
+  egress:
+  - to:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - elpa-elpa4
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - elpa-elpa4
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-postgres
+spec:
+  egress:
+  - ports:
+    - port: 5432
+      protocol: TCP
+    to:
+    - ipBlock:
+        cidr: 172.19.211.0/24
+    - ipBlock:
+        cidr: 172.19.89.0/24
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-b-allow-ingress-workload-mongodb
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          database: mongo
+    ports:
+    - port: 27017
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: percona-server-mongodb
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-b-egress-workload-mongodb
+spec:
+  egress:
+  - ports:
+    - port: 27017
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: percona-server-mongodb
+  podSelector:
+    matchLabels:
+      database: mongo
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-b-networkpolicy-allow-from-otelcollector
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - splunk-otel-collector
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-b-networkpolicy-allow-mongodb
+spec:
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: percona-server-mongodb
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: percona-server-mongodb
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: percona-server-mongodb
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-b-networkpolicy-allow-operator
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - dbops-operator
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: networkpolicy-allow-from-otelcollector
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - splunk-otel-collector
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: psmdb.percona.com/v1
+kind: PerconaServerMongoDB
+metadata:
+  finalizers:
+  - percona.com/delete-psmdb-pvc
+  name: dev-b-elpa-elpa4-mongodb
+spec:
+  allowUnsafeConfigurations: false
+  backup:
+    enabled: false
+    image: dev.docker.system.local/percona/percona-backup-mongodb:2.8.0
+    resources:
+      limits:
+        cpu: 250m
+        memory: 500Mi
+      requests:
+        cpu: 125m
+        memory: 250Mi
+  crVersion: 1.19.1
+  enableVolumeExpansion: true
+  image: dev.docker.system.local/percona/percona-server-mongodb:6.0.19-16
+  imagePullPolicy: Always
+  pause: false
+  platform: openshift
+  replsets:
+  - configuration: |
+      systemLog:
+        verbosity: 0
+        quiet: true
+      storage:
+        dbPath: data/db
+    expose:
+      enabled: false
+      type: ClusterIP
+    labels:
+      sidecar.istio.io/inject: "true"
+    livenessProbe:
+      exec:
+        command:
+        - mongosh
+        - --eval
+        - db.adminCommand('ping')
+      failureThreshold: 10
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 10
+    name: rs0
+    podDisruptionBudget:
+      maxUnavailable: 1
+    readinessProbe:
+      exec:
+        command:
+        - stat
+        - /entrypoint.sh
+      failureThreshold: 5
+      initialDelaySeconds: 15
+      periodSeconds: 60
+      successThreshold: 1
+      timeoutSeconds: 10
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2000Mi
+      requests:
+        cpu: 500m
+        memory: 1500Mi
+    size: 1
+    volumeSpec:
+      persistentVolumeClaim:
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: volume
+  secrets:
+    encryptionKey: my-cluster-name-mongodb-encryption-key
+    users: my-cluster-b-secrets
+  sharding:
+    configsvrReplSet:
+      size: 1
+      volumeSpec:
+        persistentVolumeClaim:
+          resources:
+            requests:
+              storage: 3Gi
+    enabled: false
+    mongos:
+      size: 1
+  tls:
+    mode: disabled
+  unsafeFlags:
+    replsetSize: true
+    tls: true
+  updateStrategy: SmartUpdate
+  upgradeOptions:
+    apply: disabled
+    schedule: 0 2 * * *
+    setFCV: false
+    versionServiceEndpoint: https://check.percona.com
+  users:
+  - db: admin
+    name: olly-receiver
+    passwordSecretRef:
+      key: PASSWORD
+      name: dev-b-olly-secret
+    roles:
+    - db: admin
+      name: clusterMonitor
+  - db: admin
+    name: mongouser
+    passwordSecretRef:
+      key: PASSWORD
+      name: dev-b-mongouser-secret
+    roles:
+    - db: mongodb
+      name: readWrite
+    - db: mongodb
+      name: readWrite
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: authpolicy-allow-from-ingress-gateway
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces:
+        - istio-system
+        - elpa-elpa4
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: authpolicy-allow-from-otelcollector
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces:
+        - splunk-otel-collector
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: dev-b-authpolicy-allow-from-dboperator
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces:
+        - dbops-operator
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: dev-b-authpolicy-allow-from-otelcollector
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces:
+        - splunk-otel-collector
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: dev-b-authpolicy-allow-internal-mongodb
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces:
+        - elpa-elpa4
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: percona-server-mongodb

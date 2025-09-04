@@ -1,0 +1,9 @@
+kafka:
+  user: elpa-elpa4.identity
+  acls:
+    - topic: elpa-hint-created-dev
+      permissions: ["Read", "Write"]    
+  topics:
+    - name: elpa-hint-created-dev
+      partitions: 2
+      retention.ms: 186400000 # 7 Tage    
